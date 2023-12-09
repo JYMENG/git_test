@@ -13,31 +13,18 @@ df = pd.DataFrame(data)
 df['date'] = pd.to_datetime(df['date'])
 
 # Sort DataFrame by customer, type, and date
-df.sort_values(by=['customer', 'TYPE1', 'TYPE2', 'TYPE3', 'date'], inplace=True)
+df.sort_values(by=['customer'] + [col for col in df.columns if 'TYPE' in col] + ['date'], inplace=True)
 
 # Identify the last score date before the change for each type
-change_dates = df[df[['TYPE1', 'TYPE2', 'TYPE3']].diff().ne(0).any(axis=1)].groupby(['customer']).agg(
-    TYPE1_last_score_date=('date', 'first'),
-    TYPE2_last_score_date=('date', 'first'),
-    TYPE3_last_score_date=('date', 'first'),
-    TYPE1_last_score=('TYPE1', 'last'),
-    TYPE2_last_score=('TYPE2', 'last'),
-    TYPE3_last_score=('TYPE3', 'last')
+change_dates = df[df.filter(regex='^TYPE\d').diff().ne(0).any(axis=1)].groupby(['customer']).agg(
+    **{f'{col}_last_score_date': ('date', 'first') for col in df.filter(regex='^TYPE\d').columns},
+    **{f'{col}_last_score': (col, 'last') for col in df.filter(regex='^TYPE\d').columns}
 ).reset_index()
 
 # Select the latest date and types from the last row for each customer
 result = df.groupby('customer').agg(
     latest_date=('date', 'last'),
-    TYPE1=('TYPE1', 'last'),
-    TYPE2=('TYPE2', 'last'),
-    TYPE3=('TYPE3', 'last')
+    **{f'{col}': (col, 'last') for col in df.filter(regex='^TYPE\d').columns}
 ).merge(change_dates, on='customer', how='left')
 
-# Update last score date and last score to blank if they are the same as the latest score
-for col in ['TYPE1', 'TYPE2', 'TYPE3']:
-    if result[f'{col}_last_score'] == result[col]:
-        result[f'{col}_last_score_date'] = ''
-        result[f'{col}_last_score'] = ''
-
-# Display the result
-print(result)
+# Update⬤
