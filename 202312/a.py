@@ -6,8 +6,11 @@ import pandas as pd
 # Convert the 'Date' column to datetime if it's not already
 df['Date'] = pd.to_datetime(df['Date'])
 
-# Find the latest date and corresponding value for each type for each customer
-latest_values = df.groupby('ID').apply(lambda group: group.loc[group['Date'].idxmax()])
+# Find the latest date for each group (customer)
+latest_dates = df.groupby('ID')['Date'].transform('max')
+
+# Filter rows to get the latest date and corresponding value for each type for each customer
+latest_values = df[df['Date'] == latest_dates]
 
 # Find the last date when the value changes for each type for each customer
 last_date_changed = pd.DataFrame()
