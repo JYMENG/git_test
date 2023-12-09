@@ -3,9 +3,9 @@ import pandas as pd
 # Replace the following lines with your actual DataFrame
 data = {'customer': ['c1', 'c1', 'c1'],
         'date': ['d1', 'd2', 'd3'],
-        't1': [1, 1, 1],
-        't2': [1, 1, 2],
-        't3': [1, 2, 2]}
+        'TYPE1': [1, 1, 1],
+        'TYPE2': [1, 1, 2],
+        'TYPE3': [1, 2, 2]}
 
 df = pd.DataFrame(data)
 
@@ -13,30 +13,29 @@ df = pd.DataFrame(data)
 df['date'] = pd.to_datetime(df['date'])
 
 # Sort DataFrame by customer, type, and date
-df.sort_values(by=['customer', 't1', 't2', 't3', 'date'], inplace=True)
+df.sort_values(by=['customer', 'TYPE1', 'TYPE2', 'TYPE3', 'date'], inplace=True)
 
 # Identify the last score date before the change for each type
-change_dates = df[df[['t1', 't2', 't3']].diff().ne(0).any(axis=1)].groupby(['customer']).agg(
-    t1_last_score_date=('date', 'first'), 
-    t2_last_score_date=('date', 'first'), 
-    t3_last_score_date=('date', 'first'),
-    t1_last_score=('t1', 'last'),
-    t2_last_score=('t2', 'last'),
-    t3_last_score=('t3', 'last')
+change_dates = df[df[['TYPE1', 'TYPE2', 'TYPE3']].diff().ne(0).any(axis=1)].groupby(['customer']).agg(
+    TYPE1_last_score_date=('date', 'first'),
+    TYPE2_last_score_date=('date', 'first'),
+    TYPE3_last_score_date=('date', 'first'),
+    TYPE1_last_score=('TYPE1', 'last'),
+    TYPE2_last_score=('TYPE2', 'last'),
+    TYPE3_last_score=('TYPE3', 'last')
 ).reset_index()
 
-# Select the latest date and T1, T2, T3 from the last row for each customer
+# Select the latest date and types from the last row for each customer
 result = df.groupby('customer').agg(
     latest_date=('date', 'last'),
-    t1=('t1', 'last'),
-    t2=('t2', 'last'),
-    t3=('t3', 'last')
-).merge(change_dates[['customer', 't1_last_score_date', 't2_last_score_date', 't3_last_score_date', 't1_last_score', 't2_last_score', 't3_last_score']], on='customer', how='left')
+    TYPE1=('TYPE1', 'last'),
+    TYPE2=('TYPE2', 'last'),
+    TYPE3=('TYPE3', 'last')
+).merge(change_dates, on='customer', how='left')
+
+# Handle cases where the score remains the same for the entire period
+unchanged_cols = ['TYPE1_last_score', 'TYPE2_last_score', 'TYPE3_last_score']
+result[unchanged_cols] = result.groupby('customer')[unchanged_cols].transform(lambda x: '' if x.nunique() == 1 and x.iloc[0] == result['latest_date'].iloc[0] else x)
 
 # Display the result
 print(result)
-# Display the result
-print(result)
-
-  customer latest_date  t1  t2  t3 t1_last_date t2_last_date t3_last_date  t1_last_score  t2_last_score  t3_last_score
-0       c1  2023-01-03   1   2   2          NaT   2023-01-02   2023-01-01            NaN            1.0            1.0
