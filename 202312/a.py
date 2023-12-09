@@ -27,4 +27,11 @@ result = df.groupby('customer').agg(
     **{f'{col}': (col, 'last') for col in df.filter(regex='^TYPE\d').columns}
 ).merge(change_dates, on='customer', how='left')
 
-# Update⬤
+# Update last score date and last score to blank if they are the same as the latest score
+for col in df.filter(regex='^TYPE\d').columns:
+    if result[f'{col}_last_score'] == result[col]:
+        result[f'{col}_last_score_date'] = ''
+        result[f'{col}_last_score'] = ''
+
+# Display the result
+print(result)
