@@ -16,7 +16,7 @@ latest_values = df[df['Date'] == latest_dates]
 last_date_changed = pd.DataFrame()
 
 for col in ['Type A', 'Type B', 'Type C']:
-    mask = latest_values[col] != latest_values.groupby('ID')[col].shift()
+    mask = (latest_values[col] != latest_values.groupby('ID')[col].shift()) & (~latest_values[col].isna())
     changed_values = latest_values.loc[mask, ['ID', 'Date', col]]
     last_date_changed = pd.concat([last_date_changed, changed_values])
 
