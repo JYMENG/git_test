@@ -33,9 +33,11 @@ result = df.groupby('customer').agg(
     TYPE3=('TYPE3', 'last')
 ).merge(change_dates, on='customer', how='left')
 
-# Handle cases where the score remains the same for the entire period
-unchanged_cols = ['TYPE1_last_score', 'TYPE2_last_score', 'TYPE3_last_score']
-result[unchanged_cols] = result.groupby('customer')[unchanged_cols].transform(lambda x: '' if x.nunique() == 1 and x.iloc[0] == result['latest_date'].iloc[0] else x)
+# Update last score date and last score to blank if they are the same as the latest score
+for col in ['TYPE1', 'TYPE2', 'TYPE3']:
+    if result[f'{col}_last_score'] == result[col]:
+        result[f'{col}_last_score_date'] = ''
+        result[f'{col}_last_score'] = ''
 
 # Display the result
 print(result)
