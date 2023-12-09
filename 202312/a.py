@@ -1,24 +1,41 @@
+
 import pandas as pd
 
-# Assuming your DataFrame is named 'df'
-# Replace 'customer', 'date', 'typeA', 'typeB', 'typeC' with your actual column names
+# Replace the following lines with your actual DataFrame
+data = {'customer': ['c1', 'c1', 'c1'],
+        'date': ['d1', 'd2', 'd3'],
+        't1': [1, 1, 1],
+        't2': [1, 1, 2],
+        't3': [1, 2, 2]}
+
+df = pd.DataFrame(data)
 
 # Convert 'date' column to datetime format
 df['date'] = pd.to_datetime(df['date'])
 
 # Sort DataFrame by customer, type, and date
-df.sort_values(by=['customer', 'typeA', 'typeB', 'typeC', 'date'], inplace=True)
+df.sort_values(by=['customer', 't1', 't2', 't3', 'date'], inplace=True)
 
-# Find the last date when the score changes for each type and customer
-change_dates = df[df[['typeA', 'typeB', 'typeC']].diff().ne(0).any(axis=1)].groupby(['customer']).agg(
-    typeA_last_change=('date', 'last'), 
-    typeB_last_change=('date', 'last'), 
-    typeC_last_change=('date', 'last')
+# Identify the last date when any of the 't1', 't2', or 't3' columns is changed for each customer
+change_dates = df[df[['t1', 't2', 't3']].diff().ne(0).any(axis=1)].groupby(['customer']).agg(
+    t1_last_date=('date', 'last'), 
+    t2_last_date=('date', 'last'), 
+    t3_last_date=('date', 'last'),
+    t1_last_score=('t1', 'last'),
+    t2_last_score=('t2', 'last'),
+    t3_last_score=('t3', 'last')
 ).reset_index()
 
-# Merge with unique customer and type combinations to ensure all combinations are included
-result = pd.merge(pd.MultiIndex.from_product([df['customer'].unique(), df['typeA'].unique(), df['typeB'].unique(), df['typeC'].unique()], names=['customer', 'typeA', 'typeB', 'typeC']), 
-                  change_dates, how='left', on='customer')
+# Select the necessary columns from the last row for each customer
+result = df.groupby('customer').agg(
+    latest_date=('date', 'last'),
+    t1=('t1', 'last'),
+    t2=('t2', 'last'),
+    t3=('t3', 'last')
+).merge(change_dates[['customer', 't1_last_date', 't2_last_date', 't3_last_date', 't1_last_score', 't2_last_score', 't3_last_score']], on='customer', how='left')
 
 # Display the result
 print(result)
+
+  customer latest_date  t1  t2  t3 t1_last_date t2_last_date t3_last_date  t1_last_score  t2_last_score  t3_last_score
+0       c1  2023-01-03   1   2   2          NaT   2023-01-02   2023-01-01            NaN            1.0            1.0
