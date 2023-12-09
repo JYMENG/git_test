@@ -1,4 +1,3 @@
-
 import pandas as pd
 
 # Replace the following lines with your actual DataFrame
@@ -16,24 +15,26 @@ df['date'] = pd.to_datetime(df['date'])
 # Sort DataFrame by customer, type, and date
 df.sort_values(by=['customer', 't1', 't2', 't3', 'date'], inplace=True)
 
-# Identify the last date when any of the 't1', 't2', or 't3' columns is changed for each customer
+# Identify the last score date before the change for each type
 change_dates = df[df[['t1', 't2', 't3']].diff().ne(0).any(axis=1)].groupby(['customer']).agg(
-    t1_last_date=('date', 'last'), 
-    t2_last_date=('date', 'last'), 
-    t3_last_date=('date', 'last'),
+    t1_last_score_date=('date', 'first'), 
+    t2_last_score_date=('date', 'first'), 
+    t3_last_score_date=('date', 'first'),
     t1_last_score=('t1', 'last'),
     t2_last_score=('t2', 'last'),
     t3_last_score=('t3', 'last')
 ).reset_index()
 
-# Select the necessary columns from the last row for each customer
+# Select the latest date and T1, T2, T3 from the last row for each customer
 result = df.groupby('customer').agg(
     latest_date=('date', 'last'),
     t1=('t1', 'last'),
     t2=('t2', 'last'),
     t3=('t3', 'last')
-).merge(change_dates[['customer', 't1_last_date', 't2_last_date', 't3_last_date', 't1_last_score', 't2_last_score', 't3_last_score']], on='customer', how='left')
+).merge(change_dates[['customer', 't1_last_score_date', 't2_last_score_date', 't3_last_score_date', 't1_last_score', 't2_last_score', 't3_last_score']], on='customer', how='left')
 
+# Display the result
+print(result)
 # Display the result
 print(result)
 
