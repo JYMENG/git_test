@@ -26,6 +26,21 @@ export default {
 };
 </script>
 
+
+startProcess() {
+  this.isProcessing = true;
+
+  (async () => {
+    // Simulate an asynchronous 1-minute process, replace this with your actual logic
+    await new Promise(resolve => setTimeout(resolve, 60000));
+
+    // Your asynchronous processing logic goes here
+
+    // After the process is completed, set isProcessing to false
+    this.isProcessing = false;
+  })();
+}
+
 <style>
 .overlay {
   position: fixed;
