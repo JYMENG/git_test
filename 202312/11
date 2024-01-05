@@ -1,0 +1,11 @@
+const myArray = [
+  { "id": 1, "aaa": [{ "b": "b1", "c": "c1", "nested": [{ "d": "d1", "e": "e1" }, { "d": "d1", "e": "e1" }] }] },
+  { "id": 2, "aaa": [{ "b": "b1", "c": "c1", "nested": [] }] },
+  { "id": 3, "aaa": [] }
+];
+
+const keyMapping = { "d": "d_new", "e": "e_new" };
+
+const modifiedArray = myArray.map(item => ({ ...item, aaa: (item.aaa || []).map(innerObj => innerObj ? innerObj.map(obj => _.mapKeys(obj, (v, k) => keyMapping[k] || k)) : innerObj) }));
+
+console.log(modifiedArray);
