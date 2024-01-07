@@ -1,0 +1,26 @@
+def xor_cipher(input_data, key):
+    encrypted_data = [char ^ key for char in input_data]
+    return encrypted_data
+
+def frequency_analysis(data):
+    frequencies = {}
+    for char in data:
+        if char in frequencies:
+            frequencies[char] += 1
+        else:
+            frequencies[char] = 1
+    return frequencies
+
+# Example usage:
+original_data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+encryption_key = 42
+
+# Encrypt the data
+encrypted_data = xor_cipher(original_data, encryption_key)
+
+# Perform frequency analysis on the encrypted data
+encrypted_frequencies = frequency_analysis(encrypted_data)
+
+print("Original Data:", original_data)
+print("Encrypted Data:", encrypted_data)
+print("Encrypted Data Frequencies:", encrypted_frequencies)
