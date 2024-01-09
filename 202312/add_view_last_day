@@ -1,0 +1,29 @@
+-- Replace 'yourSchema' and 'yourTablePrefix' with the actual schema and table prefix
+-- Replace 'yourDateColumn' with the actual date column name
+-- Replace 'yourOtherColumns' with other columns you want to include in the view
+
+DECLARE @viewName NVARCHAR(MAX) = 'yourSchema.YourConcatenatedView';
+DECLARE @sql NVARCHAR(MAX) = '';
+
+-- Drop the view if it exists
+SET @sql += 'IF OBJECT_ID(' + QUOTENAME(@viewName, '''') + ', ''V'') IS NOT NULL DROP VIEW ' + @viewName + ';';
+
+-- Dynamic SQL to concatenate tables for the last day of each month
+SELECT @sql +=
+    'SELECT * FROM ' + QUOTENAME(TABLE_SCHEMA) + '.' + QUOTENAME(TABLE_NAME) + ' ' +
+    'WHERE yourDateColumn = ' +
+    '(SELECT MAX(yourDateColumn) ' +
+    ' FROM ' + QUOTENAME(TABLE_SCHEMA) + '.' + QUOTENAME(TABLE_NAME) + ') ' +
+    'UNION ALL '
+FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_SCHEMA = 'yourSchema' AND TABLE_NAME LIKE 'yourTablePrefix%'
+ORDER BY TABLE_NAME;
+
+-- Remove the trailing 'UNION ALL'
+SET @sql = LEFT(@sql, LEN(@sql) - LEN('UNION ALL'));
+
+-- Create the view
+SET @sql += 'CREATE VIEW ' + @viewName + ' AS ' + @sql;
+
+-- Execute the dynamic SQL
+EXEC(@sql);
