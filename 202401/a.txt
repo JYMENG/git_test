@@ -1,0 +1,29 @@
+Certainly! Here's a refined version of your presentation script:
+
+---
+
+Good [morning/afternoon/evening], everyone. I'm Hao, and I want to extend my gratitude to Irshad for the warm introduction. Today, I'm excited to walk you through a quick demonstration of our Audit Information Portal.
+
+To access the portal, simply navigate to our Corporate Audit Knowledge Hub, located under Audit Analytics Solutions on the dashboard. Within the hub, you'll find the Auditing Information Portal. Once inside, you'll discover sections for planning memos, Yoast user guides, and other helpful links.
+
+If you encounter any queries along the way, feel free to click on the email icon at the top right corner to reach out to our Audit Analytics team. We're here to assist you.
+
+Upon accessing the Planning Memos section, please allow 30 seconds to two minutes for the data to load. If it takes longer than five minutes, simply copy the URL and reload the page.
+
+Once loaded, you'll have two search options: by Accountable Executive or by Auditable Entity. Let me illustrate with an example using the Accountable Executive search.
+
+Let's say we're interested in gathering information relevant to Eric Most. By typing his name and clicking "Start Filtering," the button will indicate progress until it returns to its original state. You'll then see a quick summary of all relevant modules and records pertaining to Eric Most.
+
+You can choose to export the data to Excel for further analysis. Alternatively, if you prefer to explore specific modules without downloading, you can click directly on the module of interest.
+
+Similarly, you can filter based on Auditable Entity. For instance, if you're searching for Compliance Program Management, simply type the entity name or ID, initiate the filtering process, and explore the results.
+
+Our system maps Auditable Entities to business units, which in turn filter controls, ultimately facilitating risk assessments across various modules.
+
+For a detailed understanding of filtering rules and functionalities, refer to our User Guide. And of course, if you have any questions, don't hesitate to contact us via email.
+
+Now, before we delve further, I'm open to addressing any questions you may have. If not, my colleague Ameesha will delve into the STRA. Thank you.
+
+---
+
+Feel free to adjust any part to better fit your presentation style and content. Good luck with your presentation!
