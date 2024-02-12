@@ -1,0 +1,35 @@
+Hello everyone, this is how from auditor and the lead analytic and thanks irshad for the introduction and I'm excited to show a quick demonstration of our audit information portal. To access the portal simply navigated to the corporate audit knowledge of Knowledge Hub under the audit analytic solutions, the first one under dashboard a general is auditing information portal AIP.
+
+And the here you can see there is a plan the memo sections on the left with the refresh date and the next with scheduled refresh date.
+
+Under the in the button, there is useful links including the AIP User Guide. And here you can see all the filtering rules and for each modules and we will go back to the user guide later.
+
+And on the top right there is the email icon and if you have any questions along the way, feel free to click on the email icon at the top right corner to reach out to our audit analytics team.
+
+Once you click on the planning memos, actions in the world start to erode in the data.
+
+Please allow 30 seconds to two minutes for the data to wrote. If this is take longer than five minutes, simply copy the URL, open the open a new tab and press Enter to reload the data.
+
+Most of time this should be done under 30 seconds. So now the data is loaded. There's two ways to search we can search by a cannonball executive or by auditor per entity. There's different modules based on different type of search. I will first delay show example by a countable executive and the later I will also show example by searching auditable entity.
+
+For example, if we wanted to search for was Eric once we type the name and choose the Accountable executive. We can click Start a filtering, the filtering process will begin and it's complete
+
+so after the filtering process is complete, you can click Export All to Excel. This will save the result to one Excel spreadsheet including all the modules on the left and the lads open the file.
+
+So the first page is a summary with all the modules and the sheet. And you can just see there is a lot that's all the modules.
+
+That's all the modules and including RCRA controls. So we can also see the same data in the grid in the audit information partial so if there is also a quick summary here to show all the modules and records and timestamp. If you click on the
+
+if you click on the controls, and it will show all the controls for the four controls, it's sorted by the Accountable executive, and it will list all the controls with the people reporting to most Eric or the people reporting to Morse Eric. So all the filtering rules will be listed in the
+
+all the filtering rules will be listed in the User Guide so for example for us the era so for control, filtering rules, as it mentioned that here. If it's searched by any other accountable executive other than Darryl white, it will filter out the controls with when the name has RCT. And based on the controls field data here, it will also it will also show controls with for most direct with his direct and indirect reports all the people reporting to most Eric will show here, not just direct but also in direct reports and
+
+this is the risk assessment. Risk assessment is based on the risk controls based on the controls we will map based on this table. For example, for risk evaluation points you know, we'll filter based on the ID. And so this is how these four sheets map the two controls.
+
+Similarly, we can also filter by auditable entity, you can type in either the auditable entity ID or the auditable entity name, for example, for compliance program management, we can collect data filtering, this is a quick example. We can export all to excel similarly to what have we done before it will save the result as an AIP result. And you can also go directly to the sidebar here. It will show all the controls for when you search by auditable entity
+
+where you search for by auditable entity, it will first to lay it will first to lay map the to business unit and the based on the business unit because in controls there's two collars about a business unit, business unit and additional business units. So we have our will which will filtering in both columns and the business unit and about additional business unit and based on the results in the order.
+
+Based on the controls in the Order tab we will filter the rest of the four sheets based on the controls. This is the end of my demonstration and urge Amisha well should we'll talk more about the logic behind the the filtering and I will take you and then it's time for questions. If you have any questions feel free to ask and otherwise I mean shall we'll continue with the Michelle will talk more about the ICA Thank you
+
+Transcribed by https://otter.ai
