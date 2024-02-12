@@ -1,0 +1,29 @@
+Hello everyone. My name is Hao and thanks irshad for the introduction and today I'm going to show a quick demonstration of the audit information portal. So to go to the auditor information portal, you can go to our corporate audit Knowledge Hub under the audit analytics solutions under the dashboard there the first one is auditing information portal. And once you go into auditing information portal, there is a plan the memo sections and also there is, Yoast user guides and other useful links here. And if you have any questions you can click on the right top right in the email icon you can write to us audit analytic and we will, we will we will monitor the mailbox and once you click on the planning memos actions, it will start eroding the data. This will please be patient and this will take roughly from 30 seconds to two minutes. And if it's longer than five minutes, maybe it's happening and in if that happens, simply copy the URL and open a new web page and just load it again. So now the loading is complete. And we have two ways to search. We can search by accountable executive or search by auditable entity. I will show an example for accountable executive. So for example, if you want to have all the information relevant to Eric most
+
+you can type in the name and then click start filtering. The button will change to graying and once it's completed, it will be back to blue. And then you can see there is a quick summary of all the modules and all the records relevant to Eric most most and
+
+you can click on the export or to Excel. This will save the whole files as
+
+Excel
+
+so you can open the sheet and this will be something like
+
+there will be something like this. So it will have all the anyway or has the first page is the summary and for each page, it's each modules of the AIP.
+
+And now we can also hear you if you don't want to download export or you care if you just want a particular module for example, if you just want to ask the RA, so you can click on the RTR a or you can just move up and the done in the page. So for us they are a regulatory compliance risk assessment. For example, here we can see there is 50 563 controls font and the filtering rules for all the filtering rules including RCRA. You can find that in the AIP user guides and it also it also shows how to use in the AIP and the for the as the are a particular lay. And the first one we are searching by the Accountable executive so this is the rules it'll well used to filtering the controls and the based on the controls in a well map the integral map to the four sections for risk assessments. So hence here under risk assessment, there is four sections and also in the Excel audits five sheets is included in the Excel output.
+
+Similarly, we can also filter in based on the auditable entity. For example, if I wanted to search by compliance program management you can type in the audit report entity name or if you know the auditable entity ID again, click on start filtering and it's complete. And we can export the all or we can go to the we can click Export All to excel and in a world save the Excel file. And we can open the Excel file and as you can see, this is all the modules included. And here we have the RCI controls for Rs di controls, we have the three taps or by business unit by additional business unit. So starting from the starting from the auditable entity. Firstly we map to
+
+so start from
+
+so start off run the startup from the auditable entity firstly we map to business unit and based on their business unit, we will filter in the controls and by either by the column business unit or buy the additional business units and based on the controls filtered out here we will map to the risk assessment based on the controls in the or taps.
+
+So for business unit, it will only filter the control procedure on the business units and about additional business units. It will filter in the additional business units and under the hood, auditable entities is always mapped to the business unit first and then it will map to controls and then that will map to the four sheets here.
+
+So this is the RCA modules and for all the other modules like issues and all the filtering rules is included in the other filtering rules is included in the User Guide. And if you have any questions about the user guide, feel free to let us know. And you can again you can click on the button here to write the email to us. And this will just as simple a convenient way to send us that job as quick email.
+
+And yeah, so it late so amnesia will hinge we'll discuss about the STR a.
+
+After I if you have any questions if you have any questions I'm happy to answer and if not Ameesha will talk more about the Sei. Thank you
+
+Transcribed by https://otter.ai
