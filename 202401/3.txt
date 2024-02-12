@@ -1,0 +1,17 @@
+Here's a refined version of your presentation:
+
+"Good morning, everyone. Thank you, Shadow, for the introduction. I'm thrilled to demonstrate our Audit Information Portal (AIP) today. To access the portal, simply navigate to the Corporate Audit Knowledge Hub under Audit Analytic Solutions. Once there, under the General Dashboard, you'll find a link to the AIP. Alternatively, you can bookmark the link for quick access.
+
+Upon entering the portal, you'll notice a button for Planning Memos Action on the left, along with options for refresh and scheduled refresh dates below. At the bottom of the page, you'll find useful links, including the AIP User Guide. If you have any questions, you can easily reach out to our Audit Analytics Team via the email icon in the top right corner.
+
+When you click on the Planning Memos Actions button, please allow 30 seconds to two minutes for the data to load. If it takes longer than five minutes, simply copy the URL, open a new tab, and reload the data.
+
+Once the loading is complete, you have two search options within AIP: by Cannibal Executive or by Auditable Entity. Let's start with a Cannibal Executive search. For example, if you're searching for Eric Maus, simply type in the name and click 'Start Filtering.' After completion, you'll see a quick summary of the records and timestamps for all modules. You can export the results to Excel for further analysis.
+
+Alternatively, you can view the data on the AIP grid. For instance, in the 'Ask the IA Controls' section, you can filter columns and view specific details. All filtering logic is detailed in the User Guide.
+
+Similarly, you can filter by Auditable Entities. For example, searching for 'Corporate Area Compliance Program Management' will yield relevant results.
+
+In conclusion, the AIP offers comprehensive data analysis tools for auditing purposes. For further information, please refer to the User Guide. Now, let's open the floor for questions." 
+
+This version aims to streamline the presentation, improve clarity, and ensure coherence in the delivery of information.
