@@ -1,0 +1,17 @@
+Hello everyone, I'm your lead auditor and analytics expert. Thank you, Irshad, for the introduction. I'm thrilled to demonstrate our Audit Information Portal (AIP). To access it, simply navigate to the Corporate Audit Knowledge Hub, under Audit Analytic Solutions, and click on the AIP dashboard.
+
+Here, you'll find planning memos on the left, with refresh and scheduled refresh dates. Below that, you'll find useful links, including the AIP User Guide, which details all filtering rules.
+
+In the top right corner, you'll see an email icon. If you have any questions, click it to reach our audit analytics team.
+
+Once you access the planning memos, data will begin populating. Allow 30 seconds to two minutes for completion. If it takes longer than five minutes, copy the URL, open a new tab, and reload the data.
+
+Searching is easy. You can search by accountable executive or auditable entity. Let's start with an accountable executive, like Eric. Once you type the name and choose the executive, click "Start Filtering." After completion, click "Export All to Excel" to save the results.
+
+You'll find a summary of all modules in the Excel file, including RCRA controls. The data is also viewable in the AIP, where you can see a quick summary of modules and records.
+
+You can also filter by auditable entity. Type the entity ID or name, like "Compliance Program Management," and export the results.
+
+For more details on filtering rules, refer to the User Guide. It explains how controls are filtered based on executives and entities.
+
+That concludes my demonstration. Amisha will now discuss the logic behind the filtering, followed by a Q&A session. Feel free to ask questions, or we can proceed with Michelle's discussion on ICA. Thank you.
