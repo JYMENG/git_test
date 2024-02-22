@@ -7,3 +7,19 @@ RETURN
         "All items selected",
         CONCATENATEX(VALUES('Table'[Column]), 'Table'[Column], ", ")
     )
+
+
+SelectedItems = 
+VAR TotalDistinctItemCount = DISTINCTCOUNT('Table'[Column])
+VAR SelectedDistinctItemCount = 
+    CALCULATE(
+        DISTINCTCOUNT('Table'[Column]),
+        ALLSELECTED('Table'[Column])
+    )
+
+RETURN
+    IF(
+        SelectedDistinctItemCount = 0 || SelectedDistinctItemCount = TotalDistinctItemCount,
+        "All items selected",
+        CONCATENATEX(VALUES('Table'[Column]), 'Table'[Column], ", ")
+    )
