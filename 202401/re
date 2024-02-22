@@ -1,0 +1,11 @@
+In Power BI, certain visuals support secondary axes, allowing you to display multiple sets of data with different scales on the same visual. Here are some visuals that commonly support secondary axes:
+
+1. **Combo Chart**: This visual combines different chart types, such as line and column charts, and allows you to assign each series to a primary or secondary axis.
+
+2. **Line and Clustered Column Chart**: Similar to the combo chart, this visual combines line and column charts and supports dual axes.
+
+3. **Line Chart**: Some line chart variations in Power BI may allow you to add a secondary axis.
+
+4. **Scatter Chart**: Scatter charts often support secondary axes, allowing you to compare two sets of numerical data with different scales.
+
+When creating or customizing one of these visuals, you should see options to assign each data series to either the primary or secondary axis.
