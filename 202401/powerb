@@ -1,0 +1,9 @@
+SelectedItems = 
+VAR TotalItemCount = DISTINCTCOUNT('Table'[Column])
+VAR SelectedItemCount = COUNTROWS(VALUES('Table'[Column]))
+RETURN
+    IF(
+        SelectedItemCount = 0 || SelectedItemCount = TotalItemCount,
+        "All items selected",
+        CONCATENATEX(VALUES('Table'[Column]), 'Table'[Column], ", ")
+    )
