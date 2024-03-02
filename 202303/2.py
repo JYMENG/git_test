@@ -28,3 +28,38 @@ with pd.ExcelWriter(excel_file, mode='a', engine='openpyxl') as writer:
     writer.book = openpyxl.load_workbook(excel_file)
     writer.sheets = {ws.title: ws for ws in writer.book.worksheets}
     df_json.to_excel(writer, sheet_name=sheet_name, startrow=len(excel_data)+1, index=False, header=False)
+    
+    
+    
+    
+    
+    
+from openpyxl import load_workbook
+from openpyxl.utils.dataframe import dataframe_to_rows
+import pandas as pd
+
+# Load the existing Excel file
+excel_file = "your_excel_file.xlsx"
+wb = load_workbook(excel_file)
+ws = wb.active
+
+# Sample DataFrame with new data
+new_data = {
+    'Name': ['Tom', 'Emma'],
+    'Age': [40, 28],
+    'City': ['Seattle', 'San Francisco']
+}
+df_new = pd.DataFrame(new_data)
+
+# Determine the range of the existing table (assuming it starts from A1)
+table_range = f"A1:{chr(ord('A') + len(df_new.columns) - 1)}1"
+
+# Write new data from DataFrame to worksheet
+for r in dataframe_to_rows(df_new, index=False, header=False):
+    ws.append(r)
+
+# Update the table range to include the new data
+new_table_range = f"{table_range.split(':')[0]}:{chr(ord('A') + len(df_new.columns) - 1)}{len(df_new) + 1}"
+
+# Save the workbook
+wb.save(excel_file)
