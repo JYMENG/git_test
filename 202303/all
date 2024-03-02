@@ -26,7 +26,30 @@ document.getElementById('downloadButton').addEventListener('click', async () => 
 });
 
 
+<template>
+  <div>
+    <button @click="downloadExcel">Download Excel</button>
+  </div>
+</template>
 
+<script>
+export default {
+  methods: {
+    async downloadExcel() {
+      const json1 = { /* Your first JSON object */ };
+      const json2 = { /* Your second JSON object */ };
+
+      try {
+        const response = await fetch('/your-backend-endpoint', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ json1, json2 })
+        });
+
+        const excelBlob = await response.blob();
+        const url = window.URL.createObjectURL(ex⬤
 
 # Backend (Django)
 import pandas as pd
