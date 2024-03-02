@@ -63,3 +63,45 @@ new_table_range = f"{table_range.split(':')[0]}:{chr(ord('A') + len(df_new.colum
 
 # Save the workbook
 wb.save(excel_file)
+
+
+
+
+from openpyxl import load_workbook
+from openpyxl.utils.dataframe import dataframe_to_rows
+import pandas as pd
+
+# Load the existing Excel file
+excel_file = "your_excel_file.xlsx"
+wb = load_workbook(excel_file)
+ws = wb.active
+
+# Sample DataFrame with new data
+new_data = {
+    'Name': ['Tom', 'Emma'],
+    'Age': [40, 28],
+    'City': ['Seattle', 'San Francisco']
+}
+df_new = pd.DataFrame(new_data)
+
+# Get the existing table range and name
+table_name = "MyTable"  # Replace with the actual table name
+existing_table = ws.tables[table_name]
+existing_table_range = existing_table.ref
+
+# Write new data from DataFrame to worksheet below the header
+for r in dataframe_to_rows(df_new, index=False, header=False):
+    ws.append(r)
+
+# Update the table range to include the new data
+existing_table_range_start, existing_table_range_end = existing_table_range.split(':')
+new_table_range_end = f"{existing_table_range_end[0]}{int(existing_table_range_end[1:]) + len(df_new)}"
+new_table_range = f"{existing_table_range_start}:{new_table_range_end}"
+
+# Update the existing table's range
+existing_table.ref = new_table_range
+
+# Save the workbook
+wb.save(excel_file)
+
+
