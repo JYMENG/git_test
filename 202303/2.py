@@ -104,4 +104,54 @@ existing_table.ref = new_table_range
 # Save the workbook
 wb.save(excel_file)
 
+from openpyxl import load_workbook
+from openpyxl.utils.dataframe import dataframe_to_rows
+import pandas as pd
+import re
+
+# Load the existing Excel file
+excel_file = "your_excel_file.xlsx"
+wb = load_workbook(excel_file)
+ws = wb.active
+
+# Sample DataFrame with new data
+new_data = {
+    'Name': ['Tom', 'Emma'],
+    'Age': [40, 28],
+    'City': ['Seattle', 'San Francisco']
+}
+df_new = pd.DataFrame(new_data)
+
+# Get the existing table range and name
+table_name = "MyTable"  # Replace with the actual table name
+existing_table = ws.tables[table_name]
+existing_table_range = existing_table.ref
+
+# Write new data from DataFrame to worksheet below the header
+for r in dataframe_to_rows(df_new, index=False, header=False):
+    ws.append(r)
+
+# Update the table range to include the new data
+table_range_start, table_range_end = existing_table_range.split(':')
+
+# Extract column letter(s) and row number using regular expressions
+start_col_letter = re.findall(r'[A-Z]+', table_range_start)[0]
+end_col_letter = re.findall(r'[A-Z]+', table_range_end)[0]
+start_row_number = int(re.findall(r'\d+', table_range_start)[0])
+end_row_number = int(re.findall(r'\d+', table_range_end)[0])
+
+# Determine new end column letter (handle cases where column index exceeds 26)
+new_end_col_letter = chr(ord(end_col_letter[-1]) + len(df_new.columns))
+if len(new_end_col_letter) > 1:
+    new_end_col_letter = chr(ord(end_col_letter[-2]) + 1) + chr(ord(end_col_letter[-1]) + len(df_new.columns) % 26)
+
+# Construct the new table range
+new_table_range = f"{start_col_letter}{start_row_number}:{new_end_col_letter}{end_row_number + len(df_new)}"
+
+# Update the existing table's range
+existing_table.ref = new_table_range
+
+# Save the workbook
+wb.save(excel_file)
+
 
