@@ -155,3 +155,49 @@ existing_table.ref = new_table_range
 wb.save(excel_file)
 
 
+
+
+
+
+from openpyxl import load_workbook
+from openpyxl.utils.cell import coordinate_to_tuple
+import pandas as pd
+
+# Load the existing Excel file
+excel_file = "your_excel_file.xlsx"
+wb = load_workbook(excel_file)
+ws = wb.active
+
+# Sample DataFrame with new data
+new_data = {
+    'Name': ['Tom', 'Emma'],
+    'Age': [40, 28],
+    'City': ['Seattle', 'San Francisco']
+}
+df_new = pd.DataFrame(new_data)
+
+# Get the existing table range and name
+table_name = "MyTable"  # Replace with the actual table name
+existing_table = ws.tables[table_name]
+existing_table_range = existing_table.ref
+
+# Convert the start and end coordinates of the table range to row and column indices
+start_row, start_col = coordinate_to_tuple(existing_table_range.split(":")[0])
+end_row, end_col = coordinate_to_tuple(existing_table_range.split(":")[1])
+
+# Write new data from DataFrame to worksheet below the header
+for r in dataframe_to_rows(df_new, index=False, header=False):
+    ws.append(r)
+
+# Update the table range to include the new data
+new_end_col = end_col + len(df_new.columns)
+new_end_row = end_row + len(df_new)
+new_table_range = f"{coordinate_to_column_string(start_col)}{start_row}:{coordinate_to_column_string(new_end_col)}{new_end_row}"
+
+# Update the existing table's range
+existing_table.ref = new_table_range
+
+# Save the workbook
+wb.save(excel_file)
+
+
