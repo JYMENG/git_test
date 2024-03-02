@@ -1,0 +1,26 @@
+// Frontend (VoE.js)
+document.getElementById('downloadButton').addEventListener('click', async () => {
+    const json1 = { /* Your first JSON object */ };
+    const json2 = { /* Your second JSON object */ };
+    
+    try {
+        const response = await fetch('/your-backend-endpoint', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ json1, json2 })
+        });
+        
+        const excelBlob = await response.blob();
+        const url = window.URL.createObjectURL(excelBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'combined_data.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error('Error:', error);
+    }
+});
