@@ -1,0 +1,35 @@
+// Trigger file download
+fetch('/generate_excel/', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({ data: jsonData })
+})
+.then(response => {
+  if (!response.ok) {
+    throw new Error('Failed to generate Excel file');
+  }
+  // Convert response to Blob
+  return response.blob();
+})
+.then(blob => {
+  // Create a temporary URL for the Blob
+  const url = window.URL.createObjectURL(blob);
+  // Create a hidden <a> element to trigger download
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', 'generated_excel.xlsx');
+  // Hide the link
+  link.style.display = 'none';
+  // Append the link to the document body
+  document.body.appendChild(link);
+  // Simulate click on the link to trigger download
+  link.click();
+  // Cleanup: remove the link and revoke the URL
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+})
+.catch(error => {
+  console.error('Error:', error);
+});
