@@ -15,4 +15,22 @@ aSub ExportPowerQueryScriptsToCSV()
             query.SaveAsODC exportPath
         End If
     Next conn
+End Sub20240402Sub ExportPowerQueryScriptsToCSV()
+    Dim conn As WorkbookConnection
+    Dim query As WorkbookQuery
+    Dim exportFolder As String
+    Dim queryName As String
+    Dim exportPath As String
+    
+    exportFolder = "C:\Path\To\Export\Folder\" ' Change this to your desired export folder path
+    
+    For Each conn In ThisWorkbook.Connections
+        If conn.Type = xlConnectionTypeQuery Then
+            Set query = conn.OLEDBConnection
+            queryName = Replace(query.CommandText, " ", "_") ' Use a valid file name for CSV
+            exportPath = exportFolder & queryName & ".csv"
+            query.SaveAsODC exportPath
+        End If
+    Next conn
 End Sub
+
