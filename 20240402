@@ -1,0 +1,18 @@
+aSub ExportPowerQueryScriptsToCSV()
+    Dim conn As WorkbookConnection
+    Dim query As WorkbookQuery
+    Dim exportFolder As String
+    Dim queryName As String
+    Dim exportPath As String
+    
+    exportFolder = "C:\Path\To\Export\Folder\" ' Change this to your desired export folder path
+    
+    For Each conn In ThisWorkbook.Connections
+        If conn.Type = xlConnectionTypeOLEDB Then
+            Set query = conn.OLEDBConnection
+            queryName = query.Name
+            exportPath = exportFolder & queryName & ".csv"
+            query.SaveAsODC exportPath
+        End If
+    Next conn
+End Sub
