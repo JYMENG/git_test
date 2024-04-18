@@ -60,6 +60,27 @@ conn.commit()  # Commit the bulk insert operation
 
 # Close the cursor and connection
 cursor.close()
+conn.import pyodbc
+
+# Establish a connection using the DSN
+conn = pyodbc.connect('DSN=YourDSNName;UID=YourUsername;PWD=YourPassword')
+
+# Create a cursor
+cursor = conn.cursor()
+
+# Example: Select count of rows from a SQL Server table
+table_name = 'YourTableName'
+
+count_query = f"SELECT COUNT(*) FROM {table_name}"
+cursor.execute(count_query)
+
+# Fetch the count value
+count_result = cursor.fetchone()[0]
+print(f"Count of rows in '{table_name}': {count_result}")
+
+# Close the cursor and connection
+cursor.close()
 conn.close()
+
 
 
