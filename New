@@ -1,0 +1,31 @@
+import pyodbc
+
+# Establish a connection using the DSN
+conn = pyodbc.connect('DSN=YourDSNName;UID=YourUsername;PWD=YourPassword')
+
+# Create a cursor
+cursor = conn.cursor()
+
+# Example: Bulk insert data from a CSV file into a SQL Server table
+file_path = 'path_to_your_file.csv'
+table_name = 'YourTableName'
+
+bulk_insert_query = f"""
+BULK INSERT {table_name}
+FROM '{file_path}'
+WITH (
+    FIELDTERMINATOR = ',',  -- Specify the field delimiter in your file
+    ROWTERMINATOR = '\\n',  -- Specify the row terminator in your file
+    FIRSTROW = 2  -- Skip the header row if present
+)
+"""
+
+# Execute the bulk insert query
+cursor.execute(bulk_insert_query)
+
+# Commit the transaction (if necessary)
+conn.commit()
+
+# Close the cursor and connection
+cursor.close()
+conn.close()
