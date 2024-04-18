@@ -28,4 +28,38 @@ conn.commit()
 
 # Close the cursor and connection
 cursor.close()
+conn.import pyodbc
+
+# Establish a connection using the DSN
+conn = pyodbc.connect('DSN=YourDSNName;UID=YourUsername;PWD=YourPassword')
+
+# Create a cursor
+cursor = conn.cursor()
+
+# Example: Bulk load and replace all data in a SQL Server table
+file_path = 'path_to_your_file.csv'
+table_name = 'YourTableName'
+
+# Step 1: Truncate the table to delete existing data
+truncate_query = f"TRUNCATE TABLE {table_name}"
+cursor.execute(truncate_query)
+conn.commit()  # Commit the truncate operation
+
+# Step 2: Bulk insert new data from a CSV file into the table
+bulk_insert_query = f"""
+BULK INSERT {table_name}
+FROM '{file_path}'
+WITH (
+    FIELDTERMINATOR = ',',  -- Specify the field delimiter in your file
+    ROWTERMINATOR = '\\n',  -- Specify the row terminator in your file
+    FIRSTROW = 2  -- Skip the header row if present
+)
+"""
+cursor.execute(bulk_insert_query)
+conn.commit()  # Commit the bulk insert operation
+
+# Close the cursor and connection
+cursor.close()
 conn.close()
+
+
