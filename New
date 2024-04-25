@@ -1,89 +1,22 @@
-import pyodbc
-
-# Establish a connection using the DSN
-conn = pyodbc.connect('DSN=YourDSNName;UID=YourUsername;PWD=YourPassword')
-
-# Create a cursor
-cursor = conn.cursor()
-
-# Example: Bulk insert data from a CSV file into a SQL Server table
-file_path = 'path_to_your_file.csv'
-table_name = 'YourTableName'
-
-bulk_insert_query = f"""
-BULK INSERT {table_name}
-FROM '{file_path}'
-WITH (
-    FIELDTERMINATOR = ',',  -- Specify the field delimiter in your file
-    ROWTERMINATOR = '\\n',  -- Specify the row terminator in your file
-    FIRSTROW = 2  -- Skip the header row if present
-)
-"""
-
-# Execute the bulk insert query
-cursor.execute(bulk_insert_query)
-
-# Commit the transaction (if necessary)
-conn.commit()
-
-# Close the cursor and connection
-cursor.close()
-conn.import pyodbc
-
-# Establish a connection using the DSN
-conn = pyodbc.connect('DSN=YourDSNName;UID=YourUsername;PWD=YourPassword')
-
-# Create a cursor
-cursor = conn.cursor()
-
-# Example: Bulk load and replace all data in a SQL Server table
-file_path = 'path_to_your_file.csv'
-table_name = 'YourTableName'
-
-# Step 1: Truncate the table to delete existing data
-truncate_query = f"TRUNCATE TABLE {table_name}"
-cursor.execute(truncate_query)
-conn.commit()  # Commit the truncate operation
-
-# Step 2: Bulk insert new data from a CSV file into the table
-bulk_insert_query = f"""
-BULK INSERT {table_name}
-FROM '{file_path}'
-WITH (
-    FIELDTERMINATOR = ',',  -- Specify the field delimiter in your file
-    ROWTERMINATOR = '\\n',  -- Specify the row terminator in your file
-    FIRSTROW = 2  -- Skip the header row if present
-)
-"""
-cursor.execute(bulk_insert_query)
-conn.commit()  # Commit the bulk insert operation
-
-# Close the cursor and connection
-cursor.close()
-conn.import pyodbc
-
-# Establish a connection using the DSN
-conn = pyodbc.connect('DSN=YourDSNName;UID=YourUsername;PWD=YourPassword')
-
-# Create a cursor
-cursor = conn.cursor()
-
-# Example: Select count of rows from a SQL Server table
-table_name = 'YourTableName'
-
-count_query = f"SELECT COUNT(*) FROM {table_name}"
-cursor.execute(count_query)
-
-# Fetch the count value
-count_result = cursor.fetchone()[0]
-print(f"Count of rows in '{table_name}': {count_result}")
-
-# Close the cursor and connection
-cursor.close()
-conn.close()
-
+import time
 import requests
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+
+# Function to scrape data from the target page
+def scrape_target_page(url):
+    response = requests.get(url)
+    if response.status_code == 200:
+        soup = BeautifulSoup(response.content, 'html.parser')
+        # Extract and process data from the target page as needed
+        # For example, find elements and extract text or attributes
+        # Example: title = soup.find('h1').text.strip()
+        # Example: content = soup.find('div', class_='content').text.strip()
+        # Return the extracted data or perform further processing
+    else:
+        print("Failed to retrieve target page. Status code:", response.status_code)
+        return None
 
 # Replace 'url_of_the_webpage' with the actual URL of the webpage containing the table
 url = 'url_of_the_webpage'
@@ -106,12 +39,26 @@ if response.status_code == 200:
             # Extract data from each cell in the row
             cells = row.find_all('td')
             if cells:  # Check if the row contains cells
-                # Print or process the cell data as needed
-                for cell in cells:
-                    print(cell.text.strip())  # Print cell content (remove leading/trailing whitespace)
+                # Assuming the link is in the first cell (index 0) of each row
+                link_element = cells[0].find('a')
+                if link_element:
+                    # Get the URL from the link
+                    target_url = link_element['href']
+                    
+                    # Initialize Selenium WebDriver (make sure to have the appropriate driver installed)
+                    driver = webdriver.Chrome()  # Use Chrome driver, replace with other drivers if needed
+                    driver.get(target_url)
+                    
+                    # Simulate a delay to allow the page to load (adjust as needed)
+                    time.sleep(2)
+                    
+                    # Scrape data from the target page using the scrape_target_page function
+                    scrape_target_page(target_url)
+                    
+                    # Close the WebDriver
+                    driver.quit()
     else:
         print("Table not found on the webpage.")
 else:
     print("Failed to retrieve webpage. Status code:", response.status_code)
-
 
