@@ -62,3 +62,59 @@ if response.status_code == 200:
 else:
     print("Failed to retrieve webpage. Status code:", response.status_code)
 
+
+
+
+import requests
+from bs4 import BeautifulSoup
+
+# Function to scrape data from the target page
+def scrape_target_page(url):
+    response = requests.get(url)
+    if response.status_code == 200:
+        soup = BeautifulSoup(response.content, 'html.parser')
+        # Extract and process data from the target page as needed
+        # For example, find elements and extract text or attributes
+        # Example: title = soup.find('h1').text.strip()
+        # Example: content = soup.find('div', class_='content').text.strip()
+        # Return the extracted data or perform further processing
+    else:
+        print("Failed to retrieve target page. Status code:", response.status_code)
+        return None
+
+# Replace 'url_of_the_webpage' with the actual URL of the initial webpage
+initial_url = 'url_of_the_webpage'
+
+# Send a GET request to the initial webpage
+initial_response = requests.get(initial_url)
+
+# Check if the request to the initial webpage was successful (status code 200)
+if initial_response.status_code == 200:
+    # Parse the HTML content of the initial webpage using BeautifulSoup
+    initial_soup = BeautifulSoup(initial_response.content, 'html.parser')
+    
+    # Find the link element you want to click on to navigate to another page
+    link_element = initial_soup.find('a', {'class': 'link-class'})  # Adjust the class name as needed
+    
+    # Check if the link element is found
+    if link_element:
+        # Get the URL from the link
+        target_url = link_element['href']
+        
+        # Send a GET request to the target page
+        target_response = requests.get(target_url)
+        
+        # Check if the request to the target page was successful (status code 200)
+        if target_response.status_code == 200:
+            # Parse the HTML content of the target page using BeautifulSoup
+            target_soup = BeautifulSoup(target_response.content, 'html.parser')
+            
+            # Scrape data from the target page using the scrape_target_page function
+            scrape_target_page(target_url)
+        else:
+            print("Failed to retrieve target page. Status code:", target_response.status_code)
+    else:
+        print("Link element not found on the initial webpage.")
+else:
+    print("Failed to retrieve initial webpage. Status code:", initial_response.status_code)
+
