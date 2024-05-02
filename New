@@ -1,3 +1,30 @@
+import os
+
+# Folder path containing the files
+folder_path = '/path/to/your/folder'
+
+# Generator function to yield unique lines
+def get_unique_lines():
+    seen_lines = set()
+    # Iterate through files in the folder
+    for filename in os.listdir(folder_path):
+        if filename.endswith('.txt'):  # Adjust file extension as needed
+            file_path = os.path.join(folder_path, filename)
+            with open(file_path, 'r') as file:
+                # Read each line from the file
+                for line in file:
+                    stripped_line = line.strip()
+                    if stripped_line and stripped_line not in seen_lines:
+                        seen_lines.add(stripped_line)
+                        yield stripped_line
+
+# Write unique lines to a new file
+output_file_path = '/path/to/your/output_file.txt'
+with open(output_file_path, 'w') as output_file:
+    for line in get_unique_lines():
+        output_file.write(line + '\n')
+
+print(f"All non-duplicate lines written to '{output_file_path}'")
 
 
 import os
