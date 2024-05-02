@@ -1,154 +1,33 @@
-import time
-import requests
-from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-
-# Function to scrape data from the target page
-def scrape_target_page(url):
-    response = requests.get(url)
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.content, 'html.parser')
-        # Extract and process data from the target page as needed
-        # For example, find elements and extract text or attributes
-        # Example: title = soup.find('h1').text.strip()
-        # Example: content = soup.find('div', class_='content').text.strip()
-        # Return the extracted data or perform further processing
-    else:
-        print("Failed to retrieve target page. Status code:", response.status_code)
-        return None
-
-# Replace 'url_of_the_webpage' with the actual URL of the webpage containing the table
-url = 'url_of_the_webpage'
-
-# Send a GET request to the webpage
-response = requests.get(url)
-
-# Check if the request was successful (status code 200)
-if response.status_code == 200:
-    # Parse the HTML content of the webpage using BeautifulSoup
-    soup = BeautifulSoup(response.content, 'html.parser')
-    
-    # Find the table element you want to extract data from
-    table = soup.find('table')
-    
-    # Check if the table is found
-    if table:
-        # Iterate through rows in the table
-        for row in table.find_all('tr'):
-            # Extract data from each cell in the row
-            cells = row.find_all('td')
-            if cells:  # Check if the row contains cells
-                # Assuming the link is in the first cell (index 0) of each row
-                link_element = cells[0].find('a')
-                if link_element:
-                    # Get the URL from the link
-                    target_url = link_element['href']
-                    
-                    # Initialize Selenium WebDriver (make sure to have the appropriate driver installed)
-                    driver = webdriver.Chrome()  # Use Chrome driver, replace with other drivers if needed
-                    driver.get(target_url)
-                    
-                    # Simulate a delay to allow the page to load (adjust as needed)
-                    time.sleep(2)
-                    
-                    # Scrape data from the target page using the scrape_target_page function
-                    scrape_target_page(target_url)
-                    
-                    # Close the WebDriver
-                    driver.quit()
-    else:
-        print("Table not found on the webpage.")
-else:
-    print("Failed to retrieve webpage. Status code:", response.status_code)
 
 
+import os
 
+# Folder path containing the files
+folder_path = '/path/to/your/folder'
 
-import requests
-from bs4 import BeautifulSoup
+# List to store lines from all files
+lines = []
 
-# Function to scrape data from the target page
-def scrape_target_page(url):
-    response = requests.get(url)
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.content, 'html.parser')
-        # Extract and process data from the target page as needed
-        # For example, find elements and extract text or attributes
-        # Example: title = soup.find('h1').text.strip()
-        # Example: content = soup.find('div', class_='content').text.strip()
-        # Return the extracted data or perform further processing
-    else:
-        print("Failed to retrieve target page. Status code:", response.status_code)
-        return None
+# Iterate through files in the folder
+for filename in os.listdir(folder_path):
+    if filename.endswith('.txt'):  # Adjust file extension as needed
+        file_path = os.path.join(folder_path, filename)
+        with open(file_path, 'r') as file:
+            # Read the first non-empty line from each file
+            for line in file:
+                if line.strip():  # Check if the line is not empty
+                    lines.append(line.strip())
+                    break  # Move to the next file after reading the first line
 
-# Replace 'url_of_the_webpage' with the actual URL of the initial webpage
-initial_url = 'url_of_the_webpage'
+# Write the first non-duplicate line to a new file
+output_file_path = '/path/to/your/output_file.txt'
+with open(output_file_path, 'w') as output_file:
+    seen_lines = set()
+    for line in lines:
+        if line not in seen_lines:
+            output_file.write(line + '\n')
+            seen_lines.add(line)
+            break  # Stop after writing the first non-duplicate line
 
-# Send a GET request to the initial webpage
-initial_response = requests.get(initial_url)
-
-# Check if the request to the initial webpage was successful (status code 200)
-if initial_response.status_code == 200:
-    # Parse the HTML content of the initial webpage using BeautifulSoup
-    initial_soup = BeautifulSoup(initial_response.content, 'html.parser')
-    
-    # Find the link element you want to click on to navigate to another page
-    link_element = initial_soup.find('a', {'class': 'link-class'})  # Adjust the class name as needed
-    
-    # Check if the link element is found
-    if link_element:
-        # Get the URL from the link
-        target_url = link_element['href']
-        
-        # Send a GET request to the target page
-        target_response = requests.get(target_url)
-        
-        # Check if the request to the target page was successful (status code 200)
-        if target_response.status_code == 200:
-            # Parse the HTML content of the target page using BeautifulSoup
-            target_soup = BeautifulSoup(target_response.content, 'html.parser')
-            
-            # Scrape data from the target page using the scrape_target_page function
-            scrape_target_page(target_url)
-        else:
-            print("Failed to retrieve target page. Status code:", target_response.status_code)
-    else:
-        print("Link element not found on the initial webpage.")
-else:
-    print("Failed to retrieve initial webpage. Status code:", initial_response.status_code)
-
-
-
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-
-# Set the path to your Microsoft Edge WebDriver executable
-edge_driver_path = 'path_to_edge_webdriver_executable'
-
-# Initialize the Edge WebDriver
-driver = webdriver.Edge(executable_path=edge_driver_path)
-
-# Navigate to the webpage with JavaScript-generated content
-driver.get('https://example.com')
-
-try:
-    # Wait for the JavaScript-generated element to be loaded
-    element = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.ID, 'id_of_generated_element'))
-    )
-
-    # Once the element is loaded, you can interact with it
-    element.click()  # Example: Click on the element
-    # Or perform other actions such as getting text, sending keys, etc.
-
-except Exception as e:
-    print("Error:", e)
-
-finally:
-    # Close the WebDriver session
-    driver.quit()
-
+print(f"First non-duplicate line written to '{output_file_path}'")
 
