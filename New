@@ -1,60 +1,28 @@
-import os
+/* Step 1: Get the distinct values of the column */
+proc sql noprint;
+    select distinct category into :categories separated by ' ' 
+    from mydata;
+quit;
 
-# Folder path containing the files
-folder_path = '/path/to/your/folder'
+/* Step 2: Split the dataset based on the distinct values */
+%macro split_files;
+    %let count = %sysfunc(countw(&categories));
 
-# Generator function to yield unique lines
-def get_unique_lines():
-    seen_lines = set()
-    # Iterate through files in the folder
-    for filename in os.listdir(folder_path):
-        if filename.endswith('.txt'):  # Adjust file extension as needed
-            file_path = os.path.join(folder_path, filename)
-            with open(file_path, 'r') as file:
-                # Read each line from the file
-                for line in file:
-                    stripped_line = line.strip()
-                    if stripped_line and stripped_line not in seen_lines:
-                        seen_lines.add(stripped_line)
-                        yield stripped_line
+    %do i = 1 %to &count;
+        %let category = %scan(&categories, &i);
 
-# Write unique lines to a new file
-output_file_path = '/path/to/your/output_file.txt'
-with open(output_file_path, 'w') as output_file:
-    for line in get_unique_lines():
-        output_file.write(line + '\n')
+        data mydata_&category;
+            set mydata;
+            where category = "&category";
+        run;
 
-print(f"All non-duplicate lines written to '{output_file_path}'")
+        /* Optional: Export each split dataset to a separate file */
+        proc export data=mydata_&category
+            outfile="&category..csv"
+            dbms=csv
+            replace;
+        run;
+    %end;
+%mend;
 
-
-import os
-
-# Folder path containing the files
-folder_path = '/path/to/your/folder'
-
-# List to store lines from all files
-lines = []
-
-# Iterate through files in the folder
-for filename in os.listdir(folder_path):
-    if filename.endswith('.txt'):  # Adjust file extension as needed
-        file_path = os.path.join(folder_path, filename)
-        with open(file_path, 'r') as file:
-            # Read the first non-empty line from each file
-            for line in file:
-                if line.strip():  # Check if the line is not empty
-                    lines.append(line.strip())
-                    break  # Move to the next file after reading the first line
-
-# Write the first non-duplicate line to a new file
-output_file_path = '/path/to/your/output_file.txt'
-with open(output_file_path, 'w') as output_file:
-    seen_lines = set()
-    for line in lines:
-        if line not in seen_lines:
-            output_file.write(line + '\n')
-            seen_lines.add(line)
-            break  # Stop after writing the first non-duplicate line
-
-print(f"First non-duplicate line written to '{output_file_path}'")
-
+%split_files;
