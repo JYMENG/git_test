@@ -1,28 +1,43 @@
-/* Step 1: Get the distinct values of the column */
-proc sql noprint;
-    select distinct category into :categories separated by ' ' 
-    from mydata;
-quit;
+import pandas as pd
+from lxml import etree
 
-/* Step 2: Split the dataset based on the distinct values */
-%macro split_files;
-    %let count = %sysfunc(countw(&categories));
+def parse_xbrl_to_dataframe(xbrl_file):
+    # Parse the XBRL file
+    tree = etree.parse(xbrl_file)
+    root = tree.getroot()
 
-    %do i = 1 %to &count;
-        %let category = %scan(&categories, &i);
+    # Define namespaces (these can vary depending on the XBRL instance)
+    namespaces = {
+        'xbrli': 'http://www.xbrl.org/2003/instance',
+        'link': 'http://www.xbrl.org/2003/linkbase',
+        # Add other namespaces as needed
+    }
 
-        data mydata_&category;
-            set mydata;
-            where category = "&category";
-        run;
+    # Extract data from XBRL
+    data = []
+    for element in root.iter():
+        if element.tag.endswith('Item'):
+            data.append({
+                'name': element.tag.split('}')[1],
+                'contextRef': element.get('contextRef'),
+                'unitRef': element.get('unitRef'),
+                'value': element.text,
+            })
 
-        /* Optional: Export each split dataset to a separate file */
-        proc export data=mydata_&category
-            outfile="&category..csv"
-            dbms=csv
-            replace;
-        run;
-    %end;
-%mend;
+    # Create a DataFrame
+    df = pd.DataFrame(data)
 
-%split_files;
+    return df
+
+def save_to_excel(dataframe, excel_file):
+    # Save DataFrame to Excel
+    dataframe.to_excel(excel_file, index=False)
+
+# Example usage
+xbrl_file = 'example.xbrl'  # Replace with your XBRL file path
+excel_file = 'output.xlsx'  # Replace with your desired Excel file path
+
+df = parse_xbrl_to_dataframe(xbrl_file)
+save_to_excel(df, excel_file)
+
+print(f'XBRL data has been saved to {excel_file}')
