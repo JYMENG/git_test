@@ -1,43 +1,40 @@
-import pandas as pd
-from lxml import etree
+/* Define the path to the Excel file */
+%let excel_file = C:\path\to\your\file.xlsx;
 
-def parse_xbrl_to_dataframe(xbrl_file):
-    # Parse the XBRL file
-    tree = etree.parse(xbrl_file)
-    root = tree.getroot()
+/* Create a macro to list all sheets */
+%macro list_sheets(file=, out=);
+    /* Use PROC IMPORT to get the sheet names */
+    proc import datafile="&file"
+        out=&out
+        dbms=excelcs replace;
+        sheet="";
+        getnames=no;
+    run;
+%mend list_sheets;
 
-    # Define namespaces (these can vary depending on the XBRL instance)
-    namespaces = {
-        'xbrli': 'http://www.xbrl.org/2003/instance',
-        'link': 'http://www.xbrl.org/2003/linkbase',
-        # Add other namespaces as needed
-    }
+/* Call the macro to list all sheets and store the output in a dataset */
+%list_sheets(file=&excel_file, out=sheet_list);
 
-    # Extract data from XBRL
-    data = []
-    for element in root.iter():
-        if element.tag.endswith('Item'):
-            data.append({
-                'name': element.tag.split('}')[1],
-                'contextRef': element.get('contextRef'),
-                'unitRef': element.get('unitRef'),
-                'value': element.text,
-            })
+/* Use a data step to create a macro variable for each sheet name */
+data _null_;
+    set sheet_list;
+    call symputx(cats('sheet', _n_), sheet_name);
+    call symputx('num_sheets', _n_);
+run;
 
-    # Create a DataFrame
-    df = pd.DataFrame(data)
+/* Create a macro to import each sheet into a separate dataset */
+%macro import_sheets(file=, num_sheets=);
+    %do i = 1 %to &num_sheets;
+        %let sheet_name = &&sheet&i;
+        
+        proc import datafile="&file"
+            out=sheet_&i
+            dbms=excelcs replace;
+            sheet="&sheet_name";
+            getnames=yes;
+        run;
+    %end;
+%mend import_sheets;
 
-    return df
-
-def save_to_excel(dataframe, excel_file):
-    # Save DataFrame to Excel
-    dataframe.to_excel(excel_file, index=False)
-
-# Example usage
-xbrl_file = 'example.xbrl'  # Replace with your XBRL file path
-excel_file = 'output.xlsx'  # Replace with your desired Excel file path
-
-df = parse_xbrl_to_dataframe(xbrl_file)
-save_to_excel(df, excel_file)
-
-print(f'XBRL data has been saved to {excel_file}')
+/* Call the macro to import each sheet */
+%import_sheets(file=&excel_file, num_sheets=&num_sheets);
