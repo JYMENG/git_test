@@ -1,24 +1,19 @@
-/* Define the path to the Excel file */
-%let excel_file = C:\path\to\your\file.xlsx;
+import pandas as pd
+from xbrl import XBRLParser, GAAP, GAAPSerializer
 
-/* List of sheet names manually specified */
-%let sheet_names = Sheet1 Sheet2 Sheet3; /* Add all known sheet names here */
+# Parse the XBRL file
+xbrl_parser = XBRLParser()
+xbrl = xbrl_parser.parse("your_xbrl_file.xml")
 
-/* Create a macro to import each sheet */
-%macro import_sheets(file=, sheets=);
-    %let num_sheets = %sysfunc(countw(&sheets));
-    
-    %do i = 1 %to &num_sheets;
-        %let sheet_name = %scan(&sheets, &i);
-        
-        proc import datafile="&file"
-            out=sheet_&i
-            dbms=xlsx replace;
-            sheet="&sheet_name";
-            getnames=yes;
-        run;
-    %end;
-%mend import_sheets;
+# Extract data (assuming US GAAP for this example)
+gaap_obj = xbrl_parser.parseGAAP(xbrl, doc_date="2024-07-20", context="current", ignore_errors=0)
 
-/* Call the macro to import the sheets */
-%import_sheets(file=&excel_file, sheets=&sheet_names);
+# Serialize to dictionary
+gaap_serializer = GAAPSerializer()
+gaap_data = gaap_serializer.dump(gaap_obj)
+
+# Convert to DataFrame
+df = pd.DataFrame(gaap_data)
+
+# Save to Excel
+df.to_excel("output.xlsx", index=False)
