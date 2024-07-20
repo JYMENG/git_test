@@ -1,19 +1,31 @@
 import pandas as pd
-from xbrl import XBRLParser, GAAP, GAAPSerializer
+from lxml import etree
 
-# Parse the XBRL file
-xbrl_parser = XBRLParser()
-xbrl = xbrl_parser.parse("your_xbrl_file.xml")
+# Load the XBRL file
+xbrl_file = 'your_xbrl_file.xml'
+tree = etree.parse(xbrl_file)
+root = tree.getroot()
 
-# Extract data (assuming US GAAP for this example)
-gaap_obj = xbrl_parser.parseGAAP(xbrl, doc_date="2024-07-20", context="current", ignore_errors=0)
+# Define namespaces (adjust according to your XBRL file)
+namespaces = {
+    'xbrli': 'http://www.xbrl.org/2003/instance',
+    'us-gaap': 'http://fasb.org/us-gaap/2020-01-31'
+}
 
-# Serialize to dictionary
-gaap_serializer = GAAPSerializer()
-gaap_data = gaap_serializer.dump(gaap_obj)
+# Extract data (adjust according to your XBRL file structure)
+data = []
+for element in root.findall('.//us-gaap:*', namespaces=namespaces):
+    context_ref = element.get('contextRef')
+    tag_name = etree.QName(element).localname
+    value = element.text
+    data.append({
+        'context_ref': context_ref,
+        'tag_name': tag_name,
+        'value': value
+    })
 
 # Convert to DataFrame
-df = pd.DataFrame(gaap_data)
+df = pd.DataFrame(data)
 
 # Save to Excel
-df.to_excel("output.xlsx", index=False)
+df.to_excel('output.xlsx', index=False)
