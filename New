@@ -1,31 +1,41 @@
-import pandas as pd
-from lxml import etree
+import xml.etree.ElementTree as ET
 
-# Load the XBRL file
-xbrl_file = 'your_xbrl_file.xml'
-tree = etree.parse(xbrl_file)
+# Parse the XBRL file
+tree = ET.parse('your_xbrl_file.xbrl')
 root = tree.getroot()
 
-# Define namespaces (adjust according to your XBRL file)
+# Define the namespaces (you can find them in your XBRL file)
 namespaces = {
     'xbrli': 'http://www.xbrl.org/2003/instance',
-    'us-gaap': 'http://fasb.org/us-gaap/2020-01-31'
+    'link': 'http://www.xbrl.org/2003/linkbase',
+    'xlink': 'http://www.w3.org/1999/xlink',
+    # Add other namespaces as needed
 }
 
-# Extract data (adjust according to your XBRL file structure)
-data = []
-for element in root.findall('.//us-gaap:*', namespaces=namespaces):
-    context_ref = element.get('contextRef')
-    tag_name = etree.QName(element).localname
-    value = element.text
-    data.append({
-        'context_ref': context_ref,
-        'tag_name': tag_name,
-        'value': value
-    })
+# Find all context elements (example)
+contexts = root.findall('.//xbrli:context', namespaces)
+for context in contexts:
+    print(context.attrib)  # Do something with the context data
 
-# Convert to DataFrame
-df = pd.DataFrame(data)
+# Find all fact elements (example)
+facts = root.findall('.//xbrli:fact', namespaces)
+for fact in facts:
+    print(fact.tag, fact.text)  # Do something with the fact data
 
-# Save to Excel
-df.to_excel('output.xlsx', index=False)
+from openpyxl import Workbook
+
+# Create a workbook and select the active worksheet
+wb = Workbook()
+ws = wb.active
+
+# Write headers (example)
+headers = ['Element', 'Value']
+ws.append(headers)
+
+# Write data (example)
+for fact in facts:
+    row = [fact.tag, fact.text]
+    ws.append(row)
+
+# Save the workbook
+wb.save('output.xlsx')
