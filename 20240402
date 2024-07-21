@@ -1,36 +1,11 @@
-aSub ExportPowerQueryScriptsToCSV()
-    Dim conn As WorkbookConnection
-    Dim query As WorkbookQuery
-    Dim exportFolder As String
-    Dim queryName As String
-    Dim exportPath As String
-    
-    exportFolder = "C:\Path\To\Export\Folder\" ' Change this to your desired export folder path
-    
-    For Each conn In ThisWorkbook.Connections
-        If conn.Type = xlConnectionTypeOLEDB Then
-            Set query = conn.OLEDBConnection
-            queryName = query.Name
-            exportPath = exportFolder & queryName & ".csv"
-            query.SaveAsODC exportPath
-        End If
-    Next conn
-End Sub20240402Sub ExportPowerQueryScriptsToCSV()
-    Dim conn As WorkbookConnection
-    Dim query As WorkbookQuery
-    Dim exportFolder As String
-    Dim queryName As String
-    Dim exportPath As String
-    
-    exportFolder = "C:\Path\To\Export\Folder\" ' Change this to your desired export folder path
-    
-    For Each conn In ThisWorkbook.Connections
-        If conn.Type = xlConnectionTypeQuery Then
-            Set query = conn.OLEDBConnection
-            queryName = Replace(query.CommandText, " ", "_") ' Use a valid file name for CSV
-            exportPath = exportFolder & queryName & ".csv"
-            query.SaveAsODC exportPath
-        End If
-    Next conn
-End Sub
+from lxml import etree
 
+# Load the XBRL file
+xbrl_file = 'your_xbrl_file.xml'
+tree = etree.parse(xbrl_file)
+root = tree.getroot()
+
+# Extract namespaces
+namespaces = root.nsmap
+for prefix, uri in namespaces.items():
+    print(f"Prefix: {prefix}, URI: {uri}")
