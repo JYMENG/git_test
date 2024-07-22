@@ -1,142 +1,48 @@
-import xml.etree.ElementTree as ET
-import xlsxwriter
-
-def parse_xbrl(xbrl_file):
-    tree = ET.parse(xbrl_file)
-    root = tree.getroot()
-
-    # Define namespaces
-    namespace = {
-        'xbrli': 'http://www.xbrl.org/2003/instance',
-        'link': 'http://www.xbrl.org/2003/linkbase',
-        'xlink': 'http://www.w3.org/1999/xlink'
-    }
-
-    schema_references = []
-    contexts = {}
-    units = {}
-    facts = []
-
-    # Extract schema references
-    for schemaRef in root.findall('.//link:schemaRef', namespace):
-        schema_href = schemaRef.get('{http://www.w3.org/1999/xlink}href')
-        schema_references.append(schema_href)
-
-    # Extract contexts
-    for context in root.findall('.//xbrli:context', namespace):
-        context_id = context.get('id')
-        entity = context.find('.//xbrli:entity/xbrli:identifier', namespace)
-        entity_id = entity.text if entity is not None else ''
-        entity_scheme = entity.get('scheme') if entity is not None else ''
-        period = context.find('.//xbrli:period', namespace)
-        start_date = period.find('xbrli:startDate', namespace)
-        end_date = period.find('xbrli:endDate', namespace)
-        instant = period.find('xbrli:instant', namespace)
-        
-        scenarios = []
-        for scenario in context.findall('.//xbrli:scenario', namespace):
-            scenarios.append(scenario.text)
-
-        contexts[context_id] = {
-            'EntityID': entity_id,
-            'EntityScheme': entity_scheme,
-            'StartDate': start_date.text if start_date is not None else '',
-            'EndDate': end_date.text if end_date is not None else '',
-            'Instant': instant.text if instant is not None else '',
-            'Scenarios': ', '.join(scenarios)
-        }
-
-    # Extract units
-    for unit in root.findall('.//xbrli:unit', namespace):
-        unit_id = unit.get('id')
-        measure = unit.find('.//xbrli:measure', namespace)
-        units[unit_id] = measure.text if measure is not None else ''
-
-    # Extract facts
-    for fact in root.findall('.//*', namespace):
-        if 'contextRef' in fact.attrib:
-            context_ref = fact.attrib['contextRef']
-            concept = fact.tag.split('}')[-1]
-            value = fact.text
-            unit_ref = fact.attrib.get('unitRef', '')
-            decimals = fact.attrib.get('decimals', '')
-            precision = fact.attrib.get('precision', '')
-
-            facts.append({
-                'Concept': concept,
-                'Value': value,
-                'ContextRef': context_ref,
-                'EntityID': contexts[context_ref]['EntityID'] if context_ref in contexts else '',
-                'EntityScheme': contexts[context_ref]['EntityScheme'] if context_ref in contexts else '',
-                'StartDate': contexts[context_ref]['StartDate'] if context_ref in contexts else '',
-                'EndDate': contexts[context_ref]['EndDate'] if context_ref in contexts else '',
-                'Instant': contexts[context_ref]['Instant'] if context_ref in contexts else '',
-                'Scenarios': contexts[context_ref]['Scenarios'] if context_ref in contexts else '',
-                'UnitRef': unit_ref,
-                'UnitMeasure': units[unit_ref] if unit_ref in units else '',
-                'Dec': decimals,
-                'Prec': precision
-            })
-
-    return schema_references, contexts, units, facts
-
-def save_to_excel(schema_references, contexts, units, facts, output_file):
-    workbook = xlsxwriter.Workbook(output_file)
+Sub UnpivotAllWorksheets()
+    Dim ws As Worksheet
+    Dim newWs As Worksheet
+    Dim outputRow As Long
+    Dim lastRow As Long, lastCol As Long
+    Dim r As Long, c As Long
     
-    # Save schema references
-    schema_sheet = workbook.add_worksheet('Schema References')
-    schema_sheet.write(0, 0, 'Schema Href')
-    for row, href in enumerate(schema_references, start=1):
-        schema_sheet.write(row, 0, href)
-
-    # Save contexts
-    context_sheet = workbook.add_worksheet('Contexts')
-    context_headers = ['ContextID', 'EntityID', 'EntityScheme', 'StartDate', 'EndDate', 'Instant', 'Scenarios']
-    for col, header in enumerate(context_headers):
-        context_sheet.write(0, col, header)
-    for row, (context_id, context) in enumerate(contexts.items(), start=1):
-        context_sheet.write(row, 0, context_id)
-        context_sheet.write(row, 1, context['EntityID'])
-        context_sheet.write(row, 2, context['EntityScheme'])
-        context_sheet.write(row, 3, context['StartDate'])
-        context_sheet.write(row, 4, context['EndDate'])
-        context_sheet.write(row, 5, context['Instant'])
-        context_sheet.write(row, 6, context['Scenarios'])
-
-    # Save units
-    unit_sheet = workbook.add_worksheet('Units')
-    unit_sheet.write(0, 0, 'UnitID')
-    unit_sheet.write(0, 1, 'Measure')
-    for row, (unit_id, measure) in enumerate(units.items(), start=1):
-        unit_sheet.write(row, 0, unit_id)
-        unit_sheet.write(row, 1, measure)
-
-    # Save facts
-    fact_sheet = workbook.add_worksheet('Facts')
-    fact_headers = ['Concept', 'Value', 'ContextRef', 'EntityID', 'EntityScheme', 'StartDate', 'EndDate', 'Instant', 'Scenarios', 'UnitRef', 'UnitMeasure', 'Dec', 'Prec']
-    for col, header in enumerate(fact_headers):
-        fact_sheet.write(0, col, header)
-    for row, fact in enumerate(facts, start=1):
-        fact_sheet.write(row, 0, fact['Concept'])
-        fact_sheet.write(row, 1, fact['Value'])
-        fact_sheet.write(row, 2, fact['ContextRef'])
-        fact_sheet.write(row, 3, fact['EntityID'])
-        fact_sheet.write(row, 4, fact['EntityScheme'])
-        fact_sheet.write(row, 5, fact['StartDate'])
-        fact_sheet.write(row, 6, fact['EndDate'])
-        fact_sheet.write(row, 7, fact['Instant'])
-        fact_sheet.write(row, 8, fact['Scenarios'])
-        fact_sheet.write(row, 9, fact['UnitRef'])
-        fact_sheet.write(row, 10, fact['UnitMeasure'])
-        fact_sheet.write(row, 11, fact['Dec'])
-        fact_sheet.write(row, 12, fact['Prec'])
-
-    workbook.close()
-
-# Path to the XBRL file
-xbrl_file = 'central_bank_of_ireland_finrep.xbrl'
-schema_references, contexts, units, facts = parse_xbrl(xbrl_file)
-
-# Path to save the Excel file
-output_file = 'financial_report.xlsx'
-save_to_excel(schema_references, contexts, units, facts, output_file)
+    ' Add a new worksheet for the unpivoted data
+    On Error Resume Next
+    Set newWs = Worksheets("Unpivoted Data")
+    On Error GoTo 0
+    If newWs Is Nothing Then
+        Set newWs = Worksheets.Add
+        newWs.Name = "Unpivoted Data"
+    End If
+    
+    ' Clear the existing data in the "Unpivoted Data" sheet
+    newWs.Cells.Clear
+    
+    ' Write headers in the "Unpivoted Data" sheet
+    newWs.Cells(1, 1).Value = "Worksheet Name"
+    newWs.Cells(1, 2).Value = "Column"
+    newWs.Cells(1, 3).Value = "Row"
+    newWs.Cells(1, 4).Value = "Value"
+    
+    outputRow = 2 ' Start writing from the second row
+    
+    ' Loop through each worksheet
+    For Each ws In ThisWorkbook.Worksheets
+        If ws.Name <> "Unpivoted Data" Then
+            lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+            lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+            
+            ' Loop through each cell in the worksheet
+            For r = 1 To lastRow
+                For c = 1 To lastCol
+                    newWs.Cells(outputRow, 1).Value = ws.Name
+                    newWs.Cells(outputRow, 2).Value = ws.Cells(1, c).Value
+                    newWs.Cells(outputRow, 3).Value = ws.Cells(r, 1).Value
+                    newWs.Cells(outputRow, 4).Value = ws.Cells(r, c).Value
+                    outputRow = outputRow + 1
+                Next c
+            Next r
+        End If
+    Next ws
+    
+    MsgBox "Unpivoting complete!", vbInformation
+End Sub
