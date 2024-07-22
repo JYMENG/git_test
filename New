@@ -17,59 +17,103 @@ def parse_xbrl(xbrl_file):
         # Add other namespaces as needed
     }
 
-    fact_data = []
+    schema_references = []
+    contexts = {}
+    units = {}
+    facts = []
 
     # Extract schema references
     for schemaRef in root.findall('.//link:schemaRef', namespace):
         schema_href = schemaRef.get('{http://www.w3.org/1999/xlink}href')
-        print(f"Schema reference: {schema_href}")
+        schema_references.append(schema_href)
 
+    # Extract contexts
     for context in root.findall('.//xbrli:context', namespace):
         context_id = context.get('id')
-        entity = context.find('.//xbrli:entity', namespace)
-        identifier = entity.find('.//xbrli:identifier', namespace)
-        scheme = identifier.get('scheme') if identifier is not None else ''
+        entity = context.find('.//xbrli:entity/xbrli:identifier', namespace)
+        entity_id = entity.text if entity is not None else ''
+        entity_scheme = entity.get('scheme') if entity is not None else ''
+        period = context.find('.//xbrli:period', namespace)
+        start_date = period.find('xbrli:startDate', namespace)
+        end_date = period.find('xbrli:endDate', namespace)
+        instant = period.find('xbrli:instant', namespace)
 
-        for fact in root.findall(f".//*[@contextRef='{context_id}']"):
+        contexts[context_id] = {
+            'EntityID': entity_id,
+            'EntityScheme': entity_scheme,
+            'StartDate': start_date.text if start_date is not None else '',
+            'EndDate': end_date.text if end_date is not None else '',
+            'Instant': instant.text if instant is not None else ''
+        }
+
+    # Extract units
+    for unit in root.findall('.//xbrli:unit', namespace):
+        unit_id = unit.get('id')
+        measure = unit.find('.//xbrli:measure', namespace)
+        units[unit_id] = measure.text if measure is not None else ''
+
+    # Extract facts
+    for fact in root.findall('.//*', namespace):
+        if 'contextRef' in fact.attrib:
+            context_ref = fact.attrib['contextRef']
             concept = fact.tag.split('}')[-1]
             value = fact.text
             unit_ref = fact.attrib.get('unitRef', '')
             decimals = fact.attrib.get('decimals', '')
             precision = fact.attrib.get('precision', '')
 
-            fact_data.append({
+            facts.append({
                 'Concept': concept,
                 'Value': value,
-                'ContextRef': context_id,
-                'Scheme': scheme,
-                'Identifier': identifier.text if identifier is not None else '',
+                'ContextRef': context_ref,
+                'EntityID': contexts[context_ref]['EntityID'] if context_ref in contexts else '',
+                'EntityScheme': contexts[context_ref]['EntityScheme'] if context_ref in contexts else '',
+                'StartDate': contexts[context_ref]['StartDate'] if context_ref in contexts else '',
+                'EndDate': contexts[context_ref]['EndDate'] if context_ref in contexts else '',
+                'Instant': contexts[context_ref]['Instant'] if context_ref in contexts else '',
                 'UnitRef': unit_ref,
+                'UnitMeasure': units[unit_ref] if unit_ref in units else '',
                 'Dec': decimals,
                 'Prec': precision
             })
 
-    return fact_data
+    return schema_references, contexts, units, facts
 
-def save_to_excel(fact_data, output_file):
+def save_to_excel(schema_references, contexts, units, facts, output_file):
     workbook = xlsxwriter.Workbook(output_file)
-    worksheet = workbook.add_worksheet()
+    
+    # Save schema references
+    schema_sheet = workbook.add_worksheet('Schema References')
+    schema_sheet.write(0, 0, 'Schema Href')
+    for row, href in enumerate(schema_references, start=1):
+        schema_sheet.write(row, 0, href)
 
-    headers = ['Concept', 'Value', 'ContextRef', 'Scheme', 'Identifier', 'UnitRef', 'Dec', 'Prec']
-    for col, header in enumerate(headers):
-        worksheet.write(0, col, header)
+    # Save contexts
+    context_sheet = workbook.add_worksheet('Contexts')
+    context_headers = ['ContextID', 'EntityID', 'EntityScheme', 'StartDate', 'EndDate', 'Instant']
+    for col, header in enumerate(context_headers):
+        context_sheet.write(0, col, header)
+    for row, (context_id, context) in enumerate(contexts.items(), start=1):
+        context_sheet.write(row, 0, context_id)
+        context_sheet.write(row, 1, context['EntityID'])
+        context_sheet.write(row, 2, context['EntityScheme'])
+        context_sheet.write(row, 3, context['StartDate'])
+        context_sheet.write(row, 4, context['EndDate'])
+        context_sheet.write(row, 5, context['Instant'])
 
-    for row, fact in enumerate(fact_data, start=1):
-        worksheet.write(row, 0, fact['Concept'])
-        worksheet.write(row, 1, fact['Value'])
-        worksheet.write(row, 2, fact['ContextRef'])
-        worksheet.write(row, 3, fact['Scheme'])
-        worksheet.write(row, 4, fact['Identifier'])
-        worksheet.write(row, 5, fact['UnitRef'])
-        worksheet.write(row, 6, fact['Dec'])
-        worksheet.write(row, 7, fact['Prec'])
+    # Save units
+    unit_sheet = workbook.add_worksheet('Units')
+    unit_sheet.write(0, 0, 'UnitID')
+    unit_sheet.write(0, 1, 'Measure')
+    for row, (unit_id, measure) in enumerate(units.items(), start=1):
+        unit_sheet.write(row, 0, unit_id)
+        unit_sheet.write(row, 1, measure)
 
-    workbook.close()
-
-xbrl_file = 'path/to/your/file.xbrl'
-fact_data = parse_xbrl(xbrl_file)
-save_to_excel(fact_data, 'output.xlsx')
+    # Save facts
+    fact_sheet = workbook.add_worksheet('Facts')
+    fact_headers = ['Concept', 'Value', 'ContextRef', 'EntityID', 'EntityScheme', 'StartDate', 'EndDate', 'Instant', 'UnitRef', 'UnitMeasure', 'Dec', 'Prec']
+    for col, header in enumerate(fact_headers):
+        fact_sheet.write(0, col, header)
+    for row, fact in enumerate(facts, start=1):
+        fact_sheet.write(row, 0, fact['Concept'])
+        fact_sheet.write(row, 1, fact['Value'])
