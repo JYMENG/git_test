@@ -117,3 +117,19 @@ def save_to_excel(schema_references, contexts, units, facts, output_file):
     for row, fact in enumerate(facts, start=1):
         fact_sheet.write(row, 0, fact['Concept'])
         fact_sheet.write(row, 1, fact['Value'])
+        fact_sheet.write(row, 2, fact['ContextRef'])
+        fact_sheet.write(row, 3, fact['EntityID'])
+        fact_sheet.write(row, 4, fact['EntityScheme'])
+        fact_sheet.write(row, 5, fact['StartDate'])
+        fact_sheet.write(row, 6, fact['EndDate'])
+        fact_sheet.write(row, 7, fact['Instant'])
+        fact_sheet.write(row, 8, fact['UnitRef'])
+        fact_sheet.write(row, 9, fact['UnitMeasure'])
+        fact_sheet.write(row, 10, fact['Dec'])
+        fact_sheet.write(row, 11, fact['Prec'])
+
+    workbook.close()
+
+xbrl_file = 'path/to/your/file.xbrl'
+schema_references, contexts, units, facts = parse_xbrl(xbrl_file)
+save_to_excel(schema_references, contexts, units, facts, 'output.xlsx')
