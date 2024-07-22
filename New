@@ -3,7 +3,9 @@ Sub UnpivotAllWorksheets()
     Dim newWs As Worksheet
     Dim outputRow As Long
     Dim lastRow As Long, lastCol As Long
+    Dim startRow As Long, startCol As Long
     Dim r As Long, c As Long
+    Dim cell As Range
     
     ' Add a new worksheet for the unpivoted data
     On Error Resume Next
@@ -28,17 +30,33 @@ Sub UnpivotAllWorksheets()
     ' Loop through each worksheet
     For Each ws In ThisWorkbook.Worksheets
         If ws.Name <> "Unpivoted Data" Then
-            lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
-            lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+            ' Find the last used row and column
+            lastRow = ws.Cells.Find(What:="*", After:=ws.Cells(1, 1), LookIn:=xlFormulas, LookAt:=xlPart, _
+                                    SearchOrder:=xlByRows, SearchDirection:=xlPrevious).Row
+            lastCol = ws.Cells.Find(What:="*", After:=ws.Cells(1, 1), LookIn:=xlFormulas, LookAt:=xlPart, _
+                                    SearchOrder:=xlByColumns, SearchDirection:=xlPrevious).Column
             
-            ' Loop through each cell in the worksheet
-            For r = 1 To lastRow
-                For c = 1 To lastCol
-                    newWs.Cells(outputRow, 1).Value = ws.Name
-                    newWs.Cells(outputRow, 2).Value = ws.Cells(1, c).Value
-                    newWs.Cells(outputRow, 3).Value = ws.Cells(r, 1).Value
-                    newWs.Cells(outputRow, 4).Value = ws.Cells(r, c).Value
-                    outputRow = outputRow + 1
+            ' Find the first used row
+            Set cell = ws.Cells.Find(What:="*", After:=ws.Cells(ws.Rows.Count, ws.Columns.Count), LookIn:=xlFormulas, LookAt:=xlPart, _
+                                     SearchOrder:=xlByRows, SearchDirection:=xlNext)
+            If Not cell Is Nothing Then startRow = cell.Row
+            
+            ' Find the first used column
+            Set cell = ws.Cells.Find(What:="*", After:=ws.Cells(ws.Rows.Count, ws.Columns.Count), LookIn:=xlFormulas, LookAt:=xlPart, _
+                                     SearchOrder:=xlByColumns, SearchDirection:=xlNext)
+            If Not cell Is Nothing Then startCol = cell.Column
+            
+            ' Loop through each cell in the worksheet within the determined range
+            For r = startRow To lastRow
+                For c = startCol To lastCol
+                    ' Skip if the cell is empty
+                    If ws.Cells(r, c).Value <> "" Then
+                        newWs.Cells(outputRow, 1).Value = ws.Name
+                        newWs.Cells(outputRow, 2).Value = ws.Cells(1, c).Value
+                        newWs.Cells(outputRow, 3).Value = ws.Cells(r, 1).Value
+                        newWs.Cells(outputRow, 4).Value = ws.Cells(r, c).Value
+                        outputRow = outputRow + 1
+                    End If
                 Next c
             Next r
         End If
