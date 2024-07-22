@@ -1,41 +1,61 @@
 import xml.etree.ElementTree as ET
+import xlsxwriter
 
-# Parse the XBRL file
-tree = ET.parse('your_xbrl_file.xbrl')
-root = tree.getroot()
+def parse_xbrl(xbrl_file):
+    tree = ET.parse(xbrl_file)
+    root = tree.getroot()
+    namespace = {
+        'xbrli': 'http://www.xbrl.org/2003/instance'
+    }
 
-# Define the namespaces (you can find them in your XBRL file)
-namespaces = {
-    'xbrli': 'http://www.xbrl.org/2003/instance',
-    'link': 'http://www.xbrl.org/2003/linkbase',
-    'xlink': 'http://www.w3.org/1999/xlink',
-    # Add other namespaces as needed
-}
+    fact_data = []
 
-# Find all context elements (example)
-contexts = root.findall('.//xbrli:context', namespaces)
-for context in contexts:
-    print(context.attrib)  # Do something with the context data
+    for context in root.findall('.//xbrli:context', namespace):
+        context_id = context.get('id')
+        entity = context.find('.//xbrli:entity', namespace)
+        identifier = entity.find('.//xbrli:identifier', namespace)
+        scheme = identifier.get('scheme') if identifier is not None else ''
 
-# Find all fact elements (example)
-facts = root.findall('.//xbrli:fact', namespaces)
-for fact in facts:
-    print(fact.tag, fact.text)  # Do something with the fact data
+        for fact in root.findall(f".//*[@contextRef='{context_id}']"):
+            concept = fact.tag.split('}')[-1]
+            value = fact.text
+            unit_ref = fact.attrib.get('unitRef', '')
+            decimals = fact.attrib.get('decimals', '')
+            precision = fact.attrib.get('precision', '')
 
-from openpyxl import Workbook
+            fact_data.append({
+                'Concept': concept,
+                'Value': value,
+                'ContextRef': context_id,
+                'Scheme': scheme,
+                'Identifier': identifier.text if identifier is not None else '',
+                'UnitRef': unit_ref,
+                'Dec': decimals,
+                'Prec': precision
+            })
 
-# Create a workbook and select the active worksheet
-wb = Workbook()
-ws = wb.active
+    return fact_data
 
-# Write headers (example)
-headers = ['Element', 'Value']
-ws.append(headers)
+def save_to_excel(fact_data, output_file):
+    workbook = xlsxwriter.Workbook(output_file)
+    worksheet = workbook.add_worksheet()
 
-# Write data (example)
-for fact in facts:
-    row = [fact.tag, fact.text]
-    ws.append(row)
+    headers = ['Concept', 'Value', 'ContextRef', 'Scheme', 'Identifier', 'UnitRef', 'Dec', 'Prec']
+    for col, header in enumerate(headers):
+        worksheet.write(0, col, header)
 
-# Save the workbook
-wb.save('output.xlsx')
+    for row, fact in enumerate(fact_data, start=1):
+        worksheet.write(row, 0, fact['Concept'])
+        worksheet.write(row, 1, fact['Value'])
+        worksheet.write(row, 2, fact['ContextRef'])
+        worksheet.write(row, 3, fact['Scheme'])
+        worksheet.write(row, 4, fact['Identifier'])
+        worksheet.write(row, 5, fact['UnitRef'])
+        worksheet.write(row, 6, fact['Dec'])
+        worksheet.write(row, 7, fact['Prec'])
+
+    workbook.close()
+
+xbrl_file = 'path/to/your/file.xbrl'
+fact_data = parse_xbrl(xbrl_file)
+save_to_excel(fact_data, 'output.xlsx')
