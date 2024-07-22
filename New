@@ -4,11 +4,25 @@ import xlsxwriter
 def parse_xbrl(xbrl_file):
     tree = ET.parse(xbrl_file)
     root = tree.getroot()
+
+    # Define namespaces from your XBRL file
     namespace = {
-        'xbrli': 'http://www.xbrl.org/2003/instance'
+        'xbrli': 'http://www.xbrl.org/2003/instance',
+        'link': 'http://www.xbrl.org/2003/linkbase',
+        'xlink': 'http://www.w3.org/1999/xlink',
+        'xbrldi': 'http://xbrl.org/2006/xbrldi',
+        'xsi': 'http://www.w3.org/2001/XMLSchema-instance',
+        'iso4217': 'http://www.xbrl.org/2003/iso4217',
+        'uk-gaap': 'http://www.xbrl.org/uk/gaap/core/2009-09-01'
+        # Add other namespaces as needed
     }
 
     fact_data = []
+
+    # Extract schema references
+    for schemaRef in root.findall('.//link:schemaRef', namespace):
+        schema_href = schemaRef.get('{http://www.w3.org/1999/xlink}href')
+        print(f"Schema reference: {schema_href}")
 
     for context in root.findall('.//xbrli:context', namespace):
         context_id = context.get('id')
