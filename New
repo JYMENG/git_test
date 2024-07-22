@@ -5,7 +5,7 @@ Sub UnpivotAllWorksheets()
     Dim lastRow As Long, lastCol As Long
     Dim startRow As Long, startCol As Long
     Dim r As Long, c As Long
-    Dim cell As Range
+    Dim found As Boolean
     
     ' Add a new worksheet for the unpivoted data
     On Error Resume Next
@@ -36,15 +36,31 @@ Sub UnpivotAllWorksheets()
             lastCol = ws.Cells.Find(What:="*", After:=ws.Cells(1, 1), LookIn:=xlFormulas, LookAt:=xlPart, _
                                     SearchOrder:=xlByColumns, SearchDirection:=xlPrevious).Column
             
-            ' Find the first used row
-            Set cell = ws.Cells.Find(What:="*", After:=ws.Cells(ws.Rows.Count, ws.Columns.Count), LookIn:=xlFormulas, LookAt:=xlPart, _
-                                     SearchOrder:=xlByRows, SearchDirection:=xlNext)
-            If Not cell Is Nothing Then startRow = cell.Row
+            ' Find the first non-empty row
+            found = False
+            For r = 1 To lastRow
+                For c = 1 To lastCol
+                    If ws.Cells(r, c).Value <> "" Then
+                        startRow = r
+                        found = True
+                        Exit For
+                    End If
+                Next c
+                If found Then Exit For
+            Next r
             
-            ' Find the first used column
-            Set cell = ws.Cells.Find(What:="*", After:=ws.Cells(ws.Rows.Count, ws.Columns.Count), LookIn:=xlFormulas, LookAt:=xlPart, _
-                                     SearchOrder:=xlByColumns, SearchDirection:=xlNext)
-            If Not cell Is Nothing Then startCol = cell.Column
+            ' Find the first non-empty column
+            found = False
+            For c = 1 To lastCol
+                For r = 1 To lastRow
+                    If ws.Cells(r, c).Value <> "" Then
+                        startCol = c
+                        found = True
+                        Exit For
+                    End If
+                Next r
+                If found Then Exit For
+            Next c
             
             ' Loop through each cell in the worksheet within the determined range
             For r = startRow To lastRow
