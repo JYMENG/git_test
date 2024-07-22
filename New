@@ -5,16 +5,11 @@ def parse_xbrl(xbrl_file):
     tree = ET.parse(xbrl_file)
     root = tree.getroot()
 
-    # Define namespaces from your XBRL file
+    # Define namespaces
     namespace = {
         'xbrli': 'http://www.xbrl.org/2003/instance',
         'link': 'http://www.xbrl.org/2003/linkbase',
-        'xlink': 'http://www.w3.org/1999/xlink',
-        'xbrldi': 'http://xbrl.org/2006/xbrldi',
-        'xsi': 'http://www.w3.org/2001/XMLSchema-instance',
-        'iso4217': 'http://www.xbrl.org/2003/iso4217',
-        'uk-gaap': 'http://www.xbrl.org/uk/gaap/core/2009-09-01'
-        # Add other namespaces as needed
+        'xlink': 'http://www.w3.org/1999/xlink'
     }
 
     schema_references = []
@@ -37,13 +32,18 @@ def parse_xbrl(xbrl_file):
         start_date = period.find('xbrli:startDate', namespace)
         end_date = period.find('xbrli:endDate', namespace)
         instant = period.find('xbrli:instant', namespace)
+        
+        scenarios = []
+        for scenario in context.findall('.//xbrli:scenario', namespace):
+            scenarios.append(scenario.text)
 
         contexts[context_id] = {
             'EntityID': entity_id,
             'EntityScheme': entity_scheme,
             'StartDate': start_date.text if start_date is not None else '',
             'EndDate': end_date.text if end_date is not None else '',
-            'Instant': instant.text if instant is not None else ''
+            'Instant': instant.text if instant is not None else '',
+            'Scenarios': ', '.join(scenarios)
         }
 
     # Extract units
@@ -71,6 +71,7 @@ def parse_xbrl(xbrl_file):
                 'StartDate': contexts[context_ref]['StartDate'] if context_ref in contexts else '',
                 'EndDate': contexts[context_ref]['EndDate'] if context_ref in contexts else '',
                 'Instant': contexts[context_ref]['Instant'] if context_ref in contexts else '',
+                'Scenarios': contexts[context_ref]['Scenarios'] if context_ref in contexts else '',
                 'UnitRef': unit_ref,
                 'UnitMeasure': units[unit_ref] if unit_ref in units else '',
                 'Dec': decimals,
@@ -90,7 +91,7 @@ def save_to_excel(schema_references, contexts, units, facts, output_file):
 
     # Save contexts
     context_sheet = workbook.add_worksheet('Contexts')
-    context_headers = ['ContextID', 'EntityID', 'EntityScheme', 'StartDate', 'EndDate', 'Instant']
+    context_headers = ['ContextID', 'EntityID', 'EntityScheme', 'StartDate', 'EndDate', 'Instant', 'Scenarios']
     for col, header in enumerate(context_headers):
         context_sheet.write(0, col, header)
     for row, (context_id, context) in enumerate(contexts.items(), start=1):
@@ -100,6 +101,7 @@ def save_to_excel(schema_references, contexts, units, facts, output_file):
         context_sheet.write(row, 3, context['StartDate'])
         context_sheet.write(row, 4, context['EndDate'])
         context_sheet.write(row, 5, context['Instant'])
+        context_sheet.write(row, 6, context['Scenarios'])
 
     # Save units
     unit_sheet = workbook.add_worksheet('Units')
@@ -111,7 +113,7 @@ def save_to_excel(schema_references, contexts, units, facts, output_file):
 
     # Save facts
     fact_sheet = workbook.add_worksheet('Facts')
-    fact_headers = ['Concept', 'Value', 'ContextRef', 'EntityID', 'EntityScheme', 'StartDate', 'EndDate', 'Instant', 'UnitRef', 'UnitMeasure', 'Dec', 'Prec']
+    fact_headers = ['Concept', 'Value', 'ContextRef', 'EntityID', 'EntityScheme', 'StartDate', 'EndDate', 'Instant', 'Scenarios', 'UnitRef', 'UnitMeasure', 'Dec', 'Prec']
     for col, header in enumerate(fact_headers):
         fact_sheet.write(0, col, header)
     for row, fact in enumerate(facts, start=1):
@@ -123,13 +125,18 @@ def save_to_excel(schema_references, contexts, units, facts, output_file):
         fact_sheet.write(row, 5, fact['StartDate'])
         fact_sheet.write(row, 6, fact['EndDate'])
         fact_sheet.write(row, 7, fact['Instant'])
-        fact_sheet.write(row, 8, fact['UnitRef'])
-        fact_sheet.write(row, 9, fact['UnitMeasure'])
-        fact_sheet.write(row, 10, fact['Dec'])
-        fact_sheet.write(row, 11, fact['Prec'])
+        fact_sheet.write(row, 8, fact['Scenarios'])
+        fact_sheet.write(row, 9, fact['UnitRef'])
+        fact_sheet.write(row, 10, fact['UnitMeasure'])
+        fact_sheet.write(row, 11, fact['Dec'])
+        fact_sheet.write(row, 12, fact['Prec'])
 
     workbook.close()
 
-xbrl_file = 'path/to/your/file.xbrl'
+# Path to the XBRL file
+xbrl_file = 'central_bank_of_ireland_finrep.xbrl'
 schema_references, contexts, units, facts = parse_xbrl(xbrl_file)
-save_to_excel(schema_references, contexts, units, facts, 'output.xlsx')
+
+# Path to save the Excel file
+output_file = 'financial_report.xlsx'
+save_to_excel(schema_references, contexts, units, facts, output_file)
