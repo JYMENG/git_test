@@ -1,76 +1,36 @@
-Sub CombineXLSFiles_FilterByKey_IncludeHeader()
-    Dim FolderPath As String
-    Dim FileName As String
-    Dim wbDest As Workbook
-    Dim wbSource As Workbook
-    Dim ws As Worksheet
-    Dim destSheet As Worksheet
-    Dim LastRow As Long
-    Dim SourceRange As Range
-    Dim DestRange As Range
-    Dim KeyValue As String
-    Dim r As Range
-    Dim IncludeHeader As Boolean
+import pandas as pd
+import os
 
-    ' Set the folder path
-    FolderPath = "C:\Your\Folder\Path\" ' Change this to your folder path
+# Define the folder containing the .xls files
+folder_path = 'path/to/your/folder'
 
-    ' Set the key value to filter by
-    KeyValue = "YourKeyValue" ' Change this to your key value
+# Define the key value to filter by
+key_column = 'YourKeyColumn'  # Replace with the column name to filter by
+key_value = 'YourKeyValue'    # Replace with the value to filter by
 
-    ' Create a new workbook for the combined data
-    Set wbDest = Workbooks.Add
-    Set destSheet = wbDest.Sheets(1)
+# Create an empty list to store filtered DataFrames
+filtered_data = []
 
-    ' Initialize the first row for data pasting
-    LastRow = 1
-    IncludeHeader = True
-
-    ' Loop through all .xls files in the folder
-    FileName = Dir(FolderPath & "*.xls")
-    Do While FileName <> ""
-        ' Open the source workbook
-        Set wbSource = Workbooks.Open(FolderPath & FileName)
+# Loop through each file in the folder
+for file_name in os.listdir(folder_path):
+    if file_name.endswith('.xls') or file_name.endswith('.htm'):
+        file_path = os.path.join(folder_path, file_name)
         
-        ' Loop through each sheet in the source workbook
-        For Each ws In wbSource.Sheets
-            ' If including header, copy it from the first file
-            If IncludeHeader Then
-                ' Copy the header row (assume it's the first row)
-                Set SourceRange = ws.Rows(1)
-                Set DestRange = destSheet.Cells(LastRow, 1).Resize(1, SourceRange.Columns.Count)
-                DestRange.Value = SourceRange.Value
-                LastRow = LastRow + 1
-                IncludeHeader = False ' After the first file, do not include the header again
-            End If
-            
-            ' Loop through each row in the source worksheet starting from the second row
-            For Each r In ws.UsedRange.Rows
-                If r.Row > 1 Then ' Skip header row
-                    ' Check if the key value is found in the row (assuming key is in column A)
-                    If r.Cells(1, 1).Value = KeyValue Then
-                        ' Find the last row in the destination sheet
-                        LastRow = destSheet.Cells(destSheet.Rows.Count, 1).End(xlUp).Row + 1
-                        
-                        ' Copy the matching row to the destination sheet
-                        Set SourceRange = r
-                        Set DestRange = destSheet.Cells(LastRow, 1).Resize(SourceRange.Rows.Count, SourceRange.Columns.Count)
-                        DestRange.Value = SourceRange.Value
-                    End If
-                End If
-            Next r
-        Next ws
-
-        ' Close the source workbook
-        wbSource.Close SaveChanges:=False
+        # Read the Excel file
+        df = pd.read_html(file_path)[0]  # Use pd.read_html to read .htm format
         
-        ' Move to the next file
-        FileName = Dir
-    Loop
+        # Filter the DataFrame by the key value
+        filtered_df = df[df[key_column] == key_value]
+        
+        if not filtered_df.empty:
+            # Add the filtered DataFrame to the list
+            filtered_data.append(filtered_df)
 
-    ' Save the destination workbook
-    wbDest.SaveAs FolderPath & "FilteredCombinedData_IncludeHeader.xls"
-    wbDest.Close
+# Combine all filtered DataFrames into one
+combined_df = pd.concat(filtered_data, ignore_index=True)
 
-    MsgBox "Filtered data has been successfully combined with the header from the first file!", vbInformation
-End Sub
+# Write the combined DataFrame to a new .xlsx file
+output_file = 'combined_output.xlsx'
+combined_df.to_excel(output_file, index=False)
+
+print(f"Combined data saved to {output_file}")
