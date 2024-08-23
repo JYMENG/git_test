@@ -1,82 +1,52 @@
-Sub UnpivotAllWorksheets()
+Sub CombineXLSFiles()
+    Dim FolderPath As String
+    Dim FileName As String
+    Dim wbDest As Workbook
+    Dim wbSource As Workbook
     Dim ws As Worksheet
-    Dim newWs As Worksheet
-    Dim outputRow As Long
-    Dim lastRow As Long, lastCol As Long
-    Dim startRow As Long, startCol As Long
-    Dim r As Long, c As Long
-    Dim found As Boolean
-    
-    ' Add a new worksheet for the unpivoted data
-    On Error Resume Next
-    Set newWs = Worksheets("Unpivoted Data")
-    On Error GoTo 0
-    If newWs Is Nothing Then
-        Set newWs = Worksheets.Add
-        newWs.Name = "Unpivoted Data"
-    End If
-    
-    ' Clear the existing data in the "Unpivoted Data" sheet
-    newWs.Cells.Clear
-    
-    ' Write headers in the "Unpivoted Data" sheet
-    newWs.Cells(1, 1).Value = "Worksheet Name"
-    newWs.Cells(1, 2).Value = "Column"
-    newWs.Cells(1, 3).Value = "Row"
-    newWs.Cells(1, 4).Value = "Value"
-    
-    outputRow = 2 ' Start writing from the second row
-    
-    ' Loop through each worksheet
-    For Each ws In ThisWorkbook.Worksheets
-        If ws.Name <> "Unpivoted Data" Then
-            ' Find the last used row and column
-            lastRow = ws.Cells.Find(What:="*", After:=ws.Cells(1, 1), LookIn:=xlFormulas, LookAt:=xlPart, _
-                                    SearchOrder:=xlByRows, SearchDirection:=xlPrevious).Row
-            lastCol = ws.Cells.Find(What:="*", After:=ws.Cells(1, 1), LookIn:=xlFormulas, LookAt:=xlPart, _
-                                    SearchOrder:=xlByColumns, SearchDirection:=xlPrevious).Column
+    Dim destSheet As Worksheet
+    Dim LastRow As Long
+
+    ' Set the folder path
+    FolderPath = "C:\Your\Folder\Path\" ' Change this to your folder path
+
+    ' Create a new workbook for the combined data
+    Set wbDest = Workbooks.Add
+    Set destSheet = wbDest.Sheets(1)
+
+    ' Initialize the first row for data pasting
+    LastRow = 1
+
+    ' Loop through all .xls files in the folder
+    FileName = Dir(FolderPath & "*.xls")
+    Do While FileName <> ""
+        ' Open the source workbook
+        Set wbSource = Workbooks.Open(FolderPath & FileName)
+        
+        ' Loop through each sheet in the source workbook
+        For Each ws In wbSource.Sheets
+            ' Find the last row in the destination sheet
+            LastRow = destSheet.Cells(destSheet.Rows.Count, 1).End(xlUp).Row + 1
             
-            ' Find the first non-empty row
-            found = False
-            For r = 1 To lastRow
-                For c = 1 To lastCol
-                    If ws.Cells(r, c).Value <> "" Then
-                        startRow = r
-                        found = True
-                        Exit For
-                    End If
-                Next c
-                If found Then Exit For
-            Next r
+            ' Copy the content from the source worksheet to the destination sheet
+            ws.UsedRange.Copy
+            destSheet.Cells(LastRow, 1).PasteSpecial Paste:=xlPasteValues
             
-            ' Find the first non-empty column
-            found = False
-            For c = 1 To lastCol
-                For r = 1 To lastRow
-                    If ws.Cells(r, c).Value <> "" Then
-                        startCol = c
-                        found = True
-                        Exit For
-                    End If
-                Next r
-                If found Then Exit For
-            Next c
-            
-            ' Loop through each cell in the worksheet within the determined range
-            For r = startRow To lastRow
-                For c = startCol To lastCol
-                    ' Skip if the cell is empty
-                    If ws.Cells(r, c).Value <> "" Then
-                        newWs.Cells(outputRow, 1).Value = ws.Name
-                        newWs.Cells(outputRow, 2).Value = ws.Cells(1, c).Value
-                        newWs.Cells(outputRow, 3).Value = ws.Cells(r, 1).Value
-                        newWs.Cells(outputRow, 4).Value = ws.Cells(r, c).Value
-                        outputRow = outputRow + 1
-                    End If
-                Next c
-            Next r
-        End If
-    Next ws
-    
-    MsgBox "Unpivoting complete!", vbInformation
+            ' Optionally, add the source workbook name and sheet name as headers
+            destSheet.Cells(LastRow, 1).Value = FileName & " - " & ws.Name
+            LastRow = LastRow + ws.UsedRange.Rows.Count
+        Next ws
+
+        ' Close the source workbook
+        wbSource.Close SaveChanges:=False
+        
+        ' Move to the next file
+        FileName = Dir
+    Loop
+
+    ' Save the destination workbook
+    wbDest.SaveAs FolderPath & "CombinedData.xls"
+    wbDest.Close
+
+    MsgBox "All files have been successfully combined!", vbInformation
 End Sub
