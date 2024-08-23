@@ -1,4 +1,4 @@
-Sub CombineXLSFiles()
+Sub CombineXLSFiles_FilterByKey_IncludeHeader()
     Dim FolderPath As String
     Dim FileName As String
     Dim wbDest As Workbook
@@ -6,9 +6,17 @@ Sub CombineXLSFiles()
     Dim ws As Worksheet
     Dim destSheet As Worksheet
     Dim LastRow As Long
+    Dim SourceRange As Range
+    Dim DestRange As Range
+    Dim KeyValue As String
+    Dim r As Range
+    Dim IncludeHeader As Boolean
 
     ' Set the folder path
     FolderPath = "C:\Your\Folder\Path\" ' Change this to your folder path
+
+    ' Set the key value to filter by
+    KeyValue = "YourKeyValue" ' Change this to your key value
 
     ' Create a new workbook for the combined data
     Set wbDest = Workbooks.Add
@@ -16,6 +24,7 @@ Sub CombineXLSFiles()
 
     ' Initialize the first row for data pasting
     LastRow = 1
+    IncludeHeader = True
 
     ' Loop through all .xls files in the folder
     FileName = Dir(FolderPath & "*.xls")
@@ -25,16 +34,31 @@ Sub CombineXLSFiles()
         
         ' Loop through each sheet in the source workbook
         For Each ws In wbSource.Sheets
-            ' Find the last row in the destination sheet
-            LastRow = destSheet.Cells(destSheet.Rows.Count, 1).End(xlUp).Row + 1
+            ' If including header, copy it from the first file
+            If IncludeHeader Then
+                ' Copy the header row (assume it's the first row)
+                Set SourceRange = ws.Rows(1)
+                Set DestRange = destSheet.Cells(LastRow, 1).Resize(1, SourceRange.Columns.Count)
+                DestRange.Value = SourceRange.Value
+                LastRow = LastRow + 1
+                IncludeHeader = False ' After the first file, do not include the header again
+            End If
             
-            ' Copy the content from the source worksheet to the destination sheet
-            ws.UsedRange.Copy
-            destSheet.Cells(LastRow, 1).PasteSpecial Paste:=xlPasteValues
-            
-            ' Optionally, add the source workbook name and sheet name as headers
-            destSheet.Cells(LastRow, 1).Value = FileName & " - " & ws.Name
-            LastRow = LastRow + ws.UsedRange.Rows.Count
+            ' Loop through each row in the source worksheet starting from the second row
+            For Each r In ws.UsedRange.Rows
+                If r.Row > 1 Then ' Skip header row
+                    ' Check if the key value is found in the row (assuming key is in column A)
+                    If r.Cells(1, 1).Value = KeyValue Then
+                        ' Find the last row in the destination sheet
+                        LastRow = destSheet.Cells(destSheet.Rows.Count, 1).End(xlUp).Row + 1
+                        
+                        ' Copy the matching row to the destination sheet
+                        Set SourceRange = r
+                        Set DestRange = destSheet.Cells(LastRow, 1).Resize(SourceRange.Rows.Count, SourceRange.Columns.Count)
+                        DestRange.Value = SourceRange.Value
+                    End If
+                End If
+            Next r
         Next ws
 
         ' Close the source workbook
@@ -45,8 +69,8 @@ Sub CombineXLSFiles()
     Loop
 
     ' Save the destination workbook
-    wbDest.SaveAs FolderPath & "CombinedData.xls"
+    wbDest.SaveAs FolderPath & "FilteredCombinedData_IncludeHeader.xls"
     wbDest.Close
 
-    MsgBox "All files have been successfully combined!", vbInformation
+    MsgBox "Filtered data has been successfully combined with the header from the first file!", vbInformation
 End Sub
