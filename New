@@ -1,17 +1,19 @@
 import pandas as pd
 import os
 
-# Define the folder containing the .xls files
 folder_path = 'path/to/your/folder'
 
-# Define the key value to filter by
-key_column = 'YourKeyColumn'  # Replace with the column name to filter by
-key_value = 'YourKeyValue'    # Replace with the value to filter by
+key_column_1 = 'YourKeyColumn1'
+key_value_1 = 'YourKeyValue1'
 
-# Create an empty list to store filtered DataFrames
+key_column_2 = 'YourKeyColumn2'
+key_value_2 = 'YourKeyValue2'
+
+key_column_3 = 'YourKeyColumn3'
+key_value_3 = 'YourKeyValue3'
+
 filtered_data = []
 
-# Loop through each file in the folder
 for file_name in os.listdir(folder_path):
     if file_name.endswith('.xls') or file_name.endswith('.htm'):
         file_path = os.path.join(folder_path, file_name)
@@ -19,18 +21,24 @@ for file_name in os.listdir(folder_path):
         # Read the Excel file
         df = pd.read_html(file_path)[0]  # Use pd.read_html to read .htm format
         
-        # Filter the DataFrame by the key value
-        filtered_df = df[df[key_column] == key_value]
+        # Print columns to check available columns in the DataFrame
+        print(f"Columns in {file_name}: {df.columns.tolist()}")
         
-        if not filtered_df.empty:
-            # Add the filtered DataFrame to the list
-            filtered_data.append(filtered_df)
+        try:
+            # Filter the DataFrame by the three key values
+            filtered_df = df[(df[key_column_1] == key_value_1) &
+                             (df[key_column_2] == key_value_2) &
+                             (df[key_column_3] == key_value_3)]
+            
+            if not filtered_df.empty:
+                filtered_data.append(filtered_df)
+        except KeyError as e:
+            print(f"KeyError: {e} in file {file_name}")
 
-# Combine all filtered DataFrames into one
-combined_df = pd.concat(filtered_data, ignore_index=True)
-
-# Write the combined DataFrame to a new .xlsx file
-output_file = 'combined_output.xlsx'
-combined_df.to_excel(output_file, index=False)
-
-print(f"Combined data saved to {output_file}")
+if filtered_data:
+    combined_df = pd.concat(filtered_data, ignore_index=True)
+    output_file = 'combined_output.xlsx'
+    combined_df.to_excel(output_file, index=False)
+    print(f"Combined data saved to {output_file}")
+else:
+    print("No data was combined.")
