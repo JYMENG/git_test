@@ -1,19 +1,29 @@
+import os
 import re
 
-# Define the input and output file paths
-input_file_path = 'input_file.csv'
-output_file_path = 'output_file.csv'
+# Define the folder path and output folder path
+folder_path = 'path_to_your_folder'
+output_folder_path = 'path_to_output_folder'
+
+# Ensure output folder exists
+os.makedirs(output_folder_path, exist_ok=True)
 
 # Compile a regex pattern to match and remove everything before the first comma
 pattern = re.compile(r'^[^,]*,')
 
-# Open the input file for reading and output file for writing
-with open(input_file_path, 'r', newline='') as infile, open(output_file_path, 'w', newline='') as outfile:
-    # Read the file line by line
-    for line in infile:
-        # Use regex to remove everything before the first comma
-        cleaned_line = pattern.sub('', line)
-        # Write the cleaned line to the output file
-        outfile.write(cleaned_line)
+# Process each CSV file in the folder
+for file_name in os.listdir(folder_path):
+    if file_name.endswith('.csv'):
+        input_file_path = os.path.join(folder_path, file_name)
+        output_file_path = os.path.join(output_folder_path, file_name)
+        
+        # Open the input file for reading and output file for writing
+        with open(input_file_path, 'r', newline='') as infile, open(output_file_path, 'w', newline='') as outfile:
+            # Read the file line by line
+            for line in infile:
+                # Use regex to remove everything before the first comma
+                cleaned_line = pattern.sub('', line)
+                # Write the cleaned line to the output file
+                outfile.write(cleaned_line)
 
-print(f"Processed file saved as {output_file_path}")
+print(f"Processed files saved to {output_folder_path}")
