@@ -1,27 +1,21 @@
-import pandas as pd
 import os
 
-def merge_files(input_folder, output_file, key_column):
-    # Create an empty DataFrame to store the combined data
-    combined_df = pd.DataFrame()
-    
-    # Loop through each file in the directory
-    for file_name in os.listdir(input_folder):
-        if file_name.endswith('.txt'):
-            file_path = os.path.join(input_folder, file_name)
-            # Read the file into a DataFrame
-            df = pd.read_csv(file_path, delimiter=',')
-            # Append the data to the combined DataFrame
-            combined_df = pd.concat([combined_df, df], ignore_index=True)
-    
-    # Remove duplicates, keeping only the first occurrence based on the key column
-    combined_df = combined_df.drop_duplicates(subset=key_column, keep='first')
-    
-    # Write the combined DataFrame to a new file
-    combined_df.to_csv(output_file, index=False)
+def process_files(input_folder, output_file, delimiter=',', key_column_index=2):
+    seen_keys = set()
+    with open(output_file, 'w') as outfile:
+        for file_name in os.listdir(input_folder):
+            if file_name.endswith('.txt'):
+                file_path = os.path.join(input_folder, file_name)
+                with open(file_path, 'r') as infile:
+                    for line in infile:
+                        columns = line.strip().split(delimiter)
+                        if len(columns) > key_column_index:
+                            key = columns[key_column_index]
+                            if key not in seen_keys:
+                                outfile.write(line)
+                                seen_keys.add(key)
 
 # Usage example
 input_folder = 'path_to_your_folder'
 output_file = 'path_to_your_output_file.txt'
-key_column = 'your_key_column_name'
-merge_files(input_folder, output_file, key_column)
+process_files(input_folder, output_file)
