@@ -1,10 +1,30 @@
+import os
 import pandas as pd
 
-# Load the data from a file (e.g., CSV)
-df = pd.read_csv('your_file.csv')
+# Directory containing the files
+folder_path = 'your_folder_path'
 
-# Drop duplicates based on a key field (e.g., 'key_column')
-df_non_duplicate = df.drop_duplicates(subset='key_column', keep='first')
+# Get a list of all files in the folder and sort them by file name
+file_list = sorted([f for f in os.listdir(folder_path) if f.endswith('.csv')])
 
-# Save the non-duplicate records to a new file
-df_non_duplicate.to_csv('non_duplicate_records.csv', index=False)
+# Initialize an empty DataFrame
+combined_df = pd.DataFrame()
+
+# Loop through the files
+for idx, file_name in enumerate(file_list):
+    # Full file path
+    file_path = os.path.join(folder_path, file_name)
+    
+    # Read the current file into a DataFrame
+    df = pd.read_csv(file_path)
+    
+    # If it's the first file, take all records
+    if idx == 0:
+        combined_df = df
+    else:
+        # For subsequent files, only add records that don't have a duplicate key in the combined DataFrame
+        df = df[~df['key_column'].isin(combined_df['key_column'])]
+        combined_df = pd.concat([combined_df, df])
+
+# Save the combined DataFrame to a new file
+combined_df.to_csv('merged_non_duplicate_records.csv', index=False)
