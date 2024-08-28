@@ -7,33 +7,32 @@ folder_path = 'your_folder_path'
 # Get a list of all .txt files in the folder and sort them by file name
 file_list = sorted([f for f in os.listdir(folder_path) if f.endswith('.txt')])
 
-# Initialize an empty DataFrame
-combined_df = pd.DataFrame()
+# Initialize a set to track unique keys
+unique_keys = set()
+
+# Initialize an empty list to store DataFrames for eventual concatenation
+dfs = []
 
 # Define the chunk size (number of rows per chunk)
 chunk_size = 10000  # Adjust based on available memory
 
 # Loop through the files
-for idx, file_name in enumerate(file_list):
+for file_name in file_list:
     # Full file path
     file_path = os.path.join(folder_path, file_name)
     
     try:
-        # Initialize an empty DataFrame for the current file
-        df_chunks = pd.DataFrame()
-        
-        # Read the file in chunks
+        # Process the file in chunks
         for chunk in pd.read_csv(file_path, delimiter=',', encoding='utf-8', chunksize=chunk_size):
-            # Append each chunk to df_chunks
-            df_chunks = pd.concat([df_chunks, chunk])
-        
-        # If it's the first file, take all records
-        if idx == 0:
-            combined_df = df_chunks
-        else:
-            # For subsequent files, only add records that don't have a duplicate key in the combined DataFrame
-            df_chunks = df_chunks[~df_chunks['key_column'].isin(combined_df['key_column'])]
-            combined_df = pd.concat([combined_df, df_chunks])
+            # Identify and keep only new records (non-duplicates based on key_column)
+            chunk['is_unique'] = ~chunk['key_column'].isin(unique_keys)
+            new_records = chunk[chunk['is_unique']].drop(columns=['is_unique'])
+            
+            # Update the set of unique keys
+            unique_keys.update(new_records['key_column'])
+            
+            # Store the chunk of new records
+            dfs.append(new_records)
     
     except pd.errors.ParserError:
         print(f"ParserError: Issue reading the file {file_name}. Check the delimiter or file format.")
@@ -41,16 +40,20 @@ for idx, file_name in enumerate(file_list):
     except UnicodeDecodeError:
         print(f"UnicodeDecodeError: Encoding issue with the file {file_name}. Trying different encoding...")
         try:
-            df_chunks = pd.DataFrame()
             for chunk in pd.read_csv(file_path, delimiter=',', encoding='ISO-8859-1', chunksize=chunk_size):
-                df_chunks = pd.concat([df_chunks, chunk])
-            combined_df = pd.concat([combined_df, df_chunks])
+                chunk['is_unique'] = ~chunk['key_column'].isin(unique_keys)
+                new_records = chunk[chunk['is_unique']].drop(columns=['is_unique'])
+                unique_keys.update(new_records['key_column'])
+                dfs.append(new_records)
         except Exception as e:
             print(f"Failed to read the file {file_name} with ISO-8859-1 encoding: {e}")
             continue
     except Exception as e:
         print(f"An unexpected error occurred with the file {file_name}: {e}")
         continue
+
+# Concatenate all the collected DataFrames into one
+combined_df = pd.concat(dfs, ignore_index=True)
 
 # Save the combined DataFrame to a new file
 combined_df.to_csv('merged_non_duplicate_records.csv', index=False)
