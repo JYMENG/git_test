@@ -1,40 +1,39 @@
-import pandas as pd
 import os
+import csv
 
-# Define the folder path and the key column
+# Define the folder path, key column, and output file
 folder_path = 'path_to_your_folder'
 key_column = 'your_key_column_name'
-
-# Initialize an empty DataFrame to store the merged data
-merged_data = pd.DataFrame()
-
-# Get a list of all .txt files in the folder
-file_list = sorted([file for file in os.listdir(folder_path) if file.endswith('.txt')])
-
-# Process each file in chunks
-for file_name in file_list:
-    file_path = os.path.join(folder_path, file_name)
-    
-    # Read the .txt file in chunks
-    for chunk in pd.read_csv(file_path, delimiter=',', chunksize=10000):
-        # Append the chunk to the merged data
-        merged_data = pd.concat([merged_data, chunk], ignore_index=True)
-        # Drop duplicates based on the key column within the merged data
-        merged_data = merged_data.drop_duplicates(subset=[key_column], keep='first')
-        
-        # If merged_data gets too large, write it to disk temporarily
-        if len(merged_data) > 1000000:
-            merged_data.to_csv('temp_merged_data.csv', mode='a', header=not os.path.exists('temp_merged_data.csv'), index=False)
-            merged_data = pd.DataFrame()  # Clear the DataFrame to free up memory
-
-# If there was a temporary file created, load it and merge with any remaining data
-if os.path.exists('temp_merged_data.csv'):
-    merged_data = pd.concat([pd.read_csv('temp_merged_data.csv'), merged_data], ignore_index=True)
-    merged_data = merged_data.drop_duplicates(subset=[key_column], keep='first')
-    os.remove('temp_merged_data.csv')  # Clean up the temporary file
-
-# Save the final merged data to a new file
 output_path = 'merged_output.csv'
-merged_data.to_csv(output_path, index=False)
+
+# Initialize a set to keep track of unique keys
+seen_keys = set()
+
+# Open the output file for writing
+with open(output_path, 'w', newline='') as output_file:
+    # Initialize CSV writer
+    writer = csv.writer(output_file)
+    
+    # Get a list of all .txt files in the folder
+    file_list = sorted([file for file in os.listdir(folder_path) if file.endswith('.txt')])
+    
+    # Iterate through each file
+    for file_name in file_list:
+        file_path = os.path.join(folder_path, file_name)
+        
+        # Open and read the current file
+        with open(file_path, 'r', encoding='utf-8') as input_file:
+            reader = csv.DictReader(input_file, delimiter=',')
+            
+            # Write header only if it's the first file
+            if output_file.tell() == 0:
+                writer.writerow(reader.fieldnames)
+            
+            # Process each row
+            for row in reader:
+                key = row[key_column]
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    writer.writerow(row.values())  # Write the row to the output file
 
 print(f"Merged file saved as {output_path}")
