@@ -1,29 +1,27 @@
+import pandas as pd
 import os
-import re
 
-# Define the folder path and output folder path
-folder_path = 'path_to_your_folder'
-output_folder_path = 'path_to_output_folder'
+def merge_files(input_folder, output_file, key_column):
+    # Create an empty DataFrame to store the combined data
+    combined_df = pd.DataFrame()
+    
+    # Loop through each file in the directory
+    for file_name in os.listdir(input_folder):
+        if file_name.endswith('.txt'):
+            file_path = os.path.join(input_folder, file_name)
+            # Read the file into a DataFrame
+            df = pd.read_csv(file_path, delimiter=',')
+            # Append the data to the combined DataFrame
+            combined_df = pd.concat([combined_df, df], ignore_index=True)
+    
+    # Remove duplicates, keeping only the first occurrence based on the key column
+    combined_df = combined_df.drop_duplicates(subset=key_column, keep='first')
+    
+    # Write the combined DataFrame to a new file
+    combined_df.to_csv(output_file, index=False)
 
-# Ensure output folder exists
-os.makedirs(output_folder_path, exist_ok=True)
-
-# Compile a regex pattern to match and remove everything before the first comma
-pattern = re.compile(r'^[^,]*,')
-
-# Process each CSV file in the folder
-for file_name in os.listdir(folder_path):
-    if file_name.endswith('.csv'):
-        input_file_path = os.path.join(folder_path, file_name)
-        output_file_path = os.path.join(output_folder_path, file_name)
-        
-        # Open the input file for reading and output file for writing
-        with open(input_file_path, 'r', newline='') as infile, open(output_file_path, 'w', newline='') as outfile:
-            # Read the file line by line
-            for line in infile:
-                # Use regex to remove everything before the first comma
-                cleaned_line = pattern.sub('', line)
-                # Write the cleaned line to the output file
-                outfile.write(cleaned_line)
-
-print(f"Processed files saved to {output_folder_path}")
+# Usage example
+input_folder = 'path_to_your_folder'
+output_file = 'path_to_your_output_file.txt'
+key_column = 'your_key_column_name'
+merge_files(input_folder, output_file, key_column)
