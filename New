@@ -1,21 +1,28 @@
-import os
+def process_file(file_path, target_char, expected_count):
+    with open(file_path, 'r') as file:
+        prev_line = None
+        for line in file:
+            line = line.strip()
+            count = line.count(target_char)
 
-def process_files(input_folder, output_file, delimiter=',', key_column_index=2):
-    seen_keys = set()
-    with open(output_file, 'w') as outfile:
-        for file_name in os.listdir(input_folder):
-            if file_name.endswith('.txt'):
-                file_path = os.path.join(input_folder, file_name)
-                with open(file_path, 'r') as infile:
-                    for line in infile:
-                        columns = line.strip().split(delimiter)
-                        if len(columns) > key_column_index:
-                            key = columns[key_column_index]
-                            if key not in seen_keys:
-                                outfile.write(line)
-                                seen_keys.add(key)
+            if count < expected_count:
+                if prev_line:
+                    # Concatenate the current line with the previous line
+                    prev_line += " " + line
+                    count += prev_line.count(target_char)
+                else:
+                    prev_line = line
+            else:
+                if prev_line:
+                    # Output the previous concatenated line
+                    print(prev_line)
+                    prev_line = None
+                # Output the current line
+                print(line)
+        
+        # Print any remaining concatenated line
+        if prev_line:
+            print(prev_line)
 
-# Usage example
-input_folder = 'path_to_your_folder'
-output_file = 'path_to_your_output_file.txt'
-process_files(input_folder, output_file)
+# Example usage:
+process_file('input.txt', ',', 2)
