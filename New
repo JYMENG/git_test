@@ -1,37 +1,31 @@
 import os
 
-def process_file(file_path, target_char, expected_count):
-    with open(file_path, 'r') as file:
-        prev_line = None
-        for line in file:
-            line = line.strip()
-            count = line.count(target_char)
+# Specify the folder path and output file path
+folder_path = 'path_to_your_folder'
+output_file = 'output_file.txt'
 
-            if count < expected_count:
-                if prev_line:
-                    # Concatenate the current line with the previous line
-                    prev_line += " " + line
-                    count += line.count(target_char)
+# Function to process a single file
+def process_file(filepath, output):
+    with open(filepath, 'r') as infile:
+        prev_line = None
+        for line in infile:
+            line = line.strip()  # Remove leading and trailing whitespace
+            if prev_line:
+                combined_line = prev_line + line
+                if combined_line.count(',') < 44:
+                    prev_line = combined_line
                 else:
+                    output.write(prev_line + '\n')
                     prev_line = line
             else:
-                if prev_line:
-                    # Output the previous concatenated line
-                    print(prev_line)
-                    prev_line = None
-                # Output the current line
-                print(line)
-        
-        # Print any remaining concatenated line
+                prev_line = line
         if prev_line:
-            print(prev_line)
+            output.write(prev_line + '\n')  # Write any remaining line
 
-def process_folder(folder_path, target_char, expected_count):
+# Open the output file in write mode
+with open(output_file, 'w') as outfile:
+    # Iterate over all files in the folder
     for filename in os.listdir(folder_path):
-        file_path = os.path.join(folder_path, filename)
-        if os.path.isfile(file_path):
-            print(f"\nProcessing file: {filename}")
-            process_file(file_path, target_char, expected_count)
-
-# Example usage:
-process_folder('path/to/your/folder', ',', 2)
+        if filename.endswith('.txt'):
+            filepath = os.path.join(folder_path, filename)
+            process_file(filepath, outfile)
