@@ -1,3 +1,5 @@
+import os
+
 def process_file(file_path, target_char, expected_count):
     with open(file_path, 'r') as file:
         prev_line = None
@@ -9,7 +11,7 @@ def process_file(file_path, target_char, expected_count):
                 if prev_line:
                     # Concatenate the current line with the previous line
                     prev_line += " " + line
-                    count += prev_line.count(target_char)
+                    count += line.count(target_char)
                 else:
                     prev_line = line
             else:
@@ -24,5 +26,12 @@ def process_file(file_path, target_char, expected_count):
         if prev_line:
             print(prev_line)
 
+def process_folder(folder_path, target_char, expected_count):
+    for filename in os.listdir(folder_path):
+        file_path = os.path.join(folder_path, filename)
+        if os.path.isfile(file_path):
+            print(f"\nProcessing file: {filename}")
+            process_file(file_path, target_char, expected_count)
+
 # Example usage:
-process_file('input.txt', ',', 2)
+process_folder('path/to/your/folder', ',', 2)
