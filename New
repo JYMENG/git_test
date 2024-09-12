@@ -1,38 +1,17 @@
-import os
+data convert_timezone;
+   set your_data;
+   /* Extract date part */
+   dt_date = datepart(gmt_datetime);
 
-# Specify the input and output folder paths
-input_folder = 'path_to_your_input_folder'
-output_folder = 'path_to_your_output_folder'
+   /* Set the default offset to 5 hours for EST (standard time) */
+   offset = -5;
 
-# Create the output folder if it does not exist
-os.makedirs(output_folder, exist_ok=True)
+   /* Check for daylight saving time (between March and November) */
+   if month(dt_date) >= 3 and month(dt_date) <= 11 then do;
+      /* For simplicity, you might refine this with exact rules */
+      offset = -4; /* Use 4-hour offset for EDT (daylight saving time) */
+   end;
 
-def process_file(input_filepath, output_filepath):
-    with open(input_filepath, 'r') as infile, open(output_filepath, 'w') as outfile:
-        prev_line = None
-        for line in infile:
-            line = line.strip()  # Remove leading and trailing whitespace
-            if prev_line:
-                # Check if both lines have fewer than 44 commas
-                if prev_line.count(',') < 44 and line.count(',') < 44:
-                    # Concatenate and continue
-                    prev_line += ' ' + line
-                else:
-                    # Write the previous line to the output file
-                    outfile.write(prev_line + '\n')
-                    # Set the current line as the previous line
-                    prev_line = line
-            else:
-                # Initialize the previous line
-                prev_line = line
-        
-        # Write any remaining line to the output file
-        if prev_line:
-            outfile.write(prev_line + '\n')
-
-# Process each file in the input folder
-for filename in os.listdir(input_folder):
-    if filename.endswith('.txt'):
-        input_filepath = os.path.join(input_folder, filename)
-        output_filepath = os.path.join(output_folder, filename)
-        process_file(input_filepath, output_filepath)
+   /* Adjust the datetime value by adding the offset in hours (converted to seconds) */
+   ny_datetime = gmt_datetime + (offset * 3600);
+run;
