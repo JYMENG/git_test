@@ -1,17 +1,15 @@
-data convert_timezone;
-   set your_data;
-   /* Extract date part */
-   dt_date = datepart(gmt_datetime);
-
-   /* Set the default offset to 5 hours for EST (standard time) */
-   offset = -5;
-
-   /* Check for daylight saving time (between March and November) */
-   if month(dt_date) >= 3 and month(dt_date) <= 11 then do;
-      /* For simplicity, you might refine this with exact rules */
-      offset = -4; /* Use 4-hour offset for EDT (daylight saving time) */
-   end;
-
-   /* Adjust the datetime value by adding the offset in hours (converted to seconds) */
-   ny_datetime = gmt_datetime + (offset * 3600);
-run;
+let
+    AddBusinessDays = (start as date, days as number) as date =>
+    let
+        DayCounter = List.Accumulate({1..days}, start, (currentDate, _) => 
+            let
+                NextDate = Date.AddDays(currentDate, 1)
+            in
+                if Date.DayOfWeek(NextDate, Day.Sunday) < 5
+                then NextDate
+                else Date.AddDays(NextDate, 1)
+        )
+    in
+        DayCounter
+in
+    AddBusinessDays([OrderDate], 5)
