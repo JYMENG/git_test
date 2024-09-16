@@ -1,15 +1,9 @@
-let
-    AddBusinessDays = (start as date, days as number) as date =>
-    let
-        DayCounter = List.Accumulate({1..days}, start, (currentDate, _) => 
-            let
-                NextDate = Date.AddDays(currentDate, 1)
-            in
-                if Date.DayOfWeek(NextDate, Day.Sunday) < 5
-                then NextDate
-                else Date.AddDays(NextDate, 1)
-        )
-    in
-        DayCounter
-in
-    AddBusinessDays([OrderDate], 5)
+(List.Last(
+    List.FirstN(
+        List.Select(
+            List.Transform(
+                {1..[n]*2}, 
+                each Date.AddDays([Date], -_)), 
+            each Date.DayOfWeek(_, Day.Monday) < 5),
+        [n])
+))
