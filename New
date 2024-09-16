@@ -1,9 +1,6 @@
-(List.Last(
-    List.FirstN(
-        List.Select(
-            List.Transform(
-                {1..[n]*2}, 
-                each Date.AddDays([Date], -_)), 
-            each Date.DayOfWeek(_, Day.Monday) < 5),
-        [n])
-))
+let
+  DaysList = List.Transform({1..[n]*2}, each Date.AddDays([Date], -_)),
+  BusinessDays = List.Select(DaysList, each Date.DayOfWeek(_, Day.Monday) < 5),
+  Result = List.FirstN(BusinessDays, [n])
+in
+  List.Last(Result)
