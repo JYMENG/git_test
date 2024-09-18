@@ -1,6 +1,9 @@
-let
-  DaysList = List.Transform({1..[n]*2}, each Date.AddDays([Date], -_)),
-  BusinessDays = List.Select(DaysList, each Date.DayOfWeek(_, Day.Monday) < 5),
-  Result = List.FirstN(BusinessDays, [n])
-in
-  List.Last(Result)
+FormattedNumber = 
+    CONCATENATEX(
+        MID(
+            FORMAT([YourNumberColumn], "0"), 
+            ROW (1:LEN(FORMAT([YourNumberColumn], "0"))), 
+            1
+        ), 
+        " "
+    )
