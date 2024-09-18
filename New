@@ -1,9 +1,6 @@
-FormattedNumber = 
-    CONCATENATEX(
-        MID(
-            FORMAT([YourNumberColumn], "0"), 
-            ROW (1:LEN(FORMAT([YourNumberColumn], "0"))), 
-            1
-        ), 
-        " "
-    )
+ArrowIndicator = 
+IF(
+    [CurrentValue] > [PreviousValue],
+    "↑",   // Upward Arrow
+    "↓"    // Downward Arrow
+)
