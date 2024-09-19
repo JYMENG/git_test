@@ -1,7 +1,7 @@
-FilteredTable = 
-VAR SelectedDates = ALLSELECTED('Date'[Date])
-RETURN
-FILTER(
-    'Sales',
-    'Sales'[Date] IN SelectedDates
-)
+PivotedTable =
+    SUMMARIZE(
+        FilteredTable,
+        YourTable[RowField],         -- Row field
+        YourTable[ColumnField],      -- Column field
+        "TotalValue", SUM(YourTable[ValueField])  -- Value to aggregate
+    )
