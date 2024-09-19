@@ -1,6 +1,7 @@
-ArrowIndicator = 
-IF(
-    [CurrentValue] > [PreviousValue],
-    "↑",   // Upward Arrow
-    "↓"    // Downward Arrow
+FilteredTable = 
+VAR SelectedDates = ALLSELECTED('Date'[Date])
+RETURN
+FILTER(
+    'Sales',
+    'Sales'[Date] IN SelectedDates
 )
