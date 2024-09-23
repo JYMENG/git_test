@@ -1,7 +1,70 @@
-PivotedTable =
-    SUMMARIZE(
-        FilteredTable,
-        YourTable[RowField],         -- Row field
-        YourTable[ColumnField],      -- Column field
-        "TotalValue", SUM(YourTable[ValueField])  -- Value to aggregate
-    )
+Sub CopyDataIfTrue()
+    Dim sourceWS As Worksheet
+    Dim targetWB As Workbook
+    Dim targetWS As Worksheet
+    Dim lastRowSource As Long, lastRowTarget As Long
+    Dim i As Long
+    Dim keyColumn As Range
+    Dim keyValue As Variant
+    Dim keyExists As Boolean
+    Dim checkKey As Range
+    Dim sourceKeyCol As Integer, sourceStatusCol As Integer
+    Dim targetFile As String
+    Dim targetLastCell As Range
+    
+    ' Define the source worksheet and columns
+    Set sourceWS = ThisWorkbook.Sheets("Source") ' Adjust to your actual source worksheet name
+    sourceKeyCol = 1 ' Assuming the key is in column A, change if necessary
+    sourceStatusCol = 2 ' Assuming the "Status" (TRUE/FALSE) is in column B, change if necessary
+    
+    ' Define the destination file and worksheet
+    targetFile = "C:\path\to\destination\file.xlsx" ' Update the path to the target workbook
+    
+    ' Open the destination workbook
+    On Error Resume Next
+    Set targetWB = Workbooks.Open(targetFile)
+    On Error GoTo 0
+    
+    If targetWB Is Nothing Then
+        MsgBox "The target workbook could not be opened.", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Set the target worksheet
+    Set targetWS = targetWB.Sheets("Target") ' Adjust to your actual target worksheet name
+    
+    ' Get the last row in the source sheet
+    lastRowSource = sourceWS.Cells(sourceWS.Rows.Count, sourceKeyCol).End(xlUp).Row
+    
+    ' Get the last row in the target sheet
+    lastRowTarget = targetWS.Cells(targetWS.Rows.Count, sourceKeyCol).End(xlUp).Row
+    
+    ' Loop through the source data
+    For i = 2 To lastRowSource ' Assuming the data starts from row 2
+        keyValue = sourceWS.Cells(i, sourceKeyCol).Value
+        
+        ' Check if the Status column is TRUE
+        If sourceWS.Cells(i, sourceStatusCol).Value = True Then
+            ' Search for the key in the target sheet
+            Set checkKey = targetWS.Columns(sourceKeyCol).Find(What:=keyValue, LookIn:=xlValues, LookAt:=xlWhole)
+            
+            If Not checkKey Is Nothing Then
+                ' Key exists, show message and quit
+                MsgBox "Key '" & keyValue & "' already exists in the target sheet. Operation aborted.", vbExclamation
+                targetWB.Close False
+                Exit Sub
+            Else
+                ' Key does not exist, append the data to the target sheet
+                lastRowTarget = lastRowTarget + 1
+                targetWS.Cells(lastRowTarget, sourceKeyCol).Value = keyValue
+                targetWS.Cells(lastRowTarget, sourceStatusCol).Value = sourceWS.Cells(i, sourceStatusCol).Value
+                ' Add more columns if necessary
+            End If
+        End If
+    Next i
+    
+    ' Save and close the target workbook
+    targetWB.Close SaveChanges:=True
+    
+    MsgBox "Data copied successfully.", vbInformation
+End Sub
