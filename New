@@ -6,10 +6,9 @@ Sub CopyFilteredData(sourceTab As String, targetTab As String)
     Dim sourceKeyCol As Integer, sourceStatusCol As Integer
     Dim targetFile As String
     Dim visibleRange As Range
-    Dim keyRange As Range
     Dim keyValue As Variant
     Dim checkKey As Range
-    Dim rng As Range
+    Dim row As Range
     
     ' Set source worksheet dynamically
     Set sourceWS = ThisWorkbook.Sheets(sourceTab)
@@ -59,8 +58,8 @@ Sub CopyFilteredData(sourceTab As String, targetTab As String)
     lastRowTarget = targetWS.Cells(targetWS.Rows.Count, sourceKeyCol).End(xlUp).Row
     
     ' Loop through visible rows in the filtered range
-    For Each rng In visibleRange.Areas
-        keyValue = rng.Value
+    For Each row In visibleRange
+        keyValue = sourceWS.Cells(row.Row, sourceKeyCol).Value
         
         ' Check if the key exists in the target sheet
         Set checkKey = targetWS.Columns(sourceKeyCol).Find(What:=keyValue, LookIn:=xlValues, LookAt:=xlWhole)
@@ -74,9 +73,9 @@ Sub CopyFilteredData(sourceTab As String, targetTab As String)
         Else
             ' Append the visible rows to the target sheet
             lastRowTarget = lastRowTarget + 1
-            rng.EntireRow.Copy targetWS.Rows(lastRowTarget)
+            sourceWS.Rows(row.Row).Copy targetWS.Rows(lastRowTarget)
         End If
-    Next rng
+    Next row
     
     ' Clear the filter
     sourceWS.AutoFilterMode = False
