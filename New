@@ -1,11 +1,19 @@
-FilteredSummarizedTable = 
-SUMMARIZE(
-    CALCULATETABLE(
-        ExistingTable, 
-        ExistingTable[Region] IN VALUES(ExistingTable[Region])  -- Slicer-driven filter
-    ),
-    ExistingTable[Category],                        -- Row 1
-    ExistingTable[SubCategory],                     -- Row 2
-    ExistingTable[Year],                            -- Column
-    "Total Sales", SUM(ExistingTable[SalesAmount])  -- Summarized Value
-)
+DynamicPivotTable = 
+VAR SelectedRegions = VALUES(ExistingTable[Region])    -- Get selected regions from slicer
+VAR SelectedYears = VALUES(ExistingTable[Year])         -- Get selected years from slicer
+VAR DistinctQuarters = DISTINCT(ExistingTable[Quarter])  -- Get distinct values from the Quarter column
+
+RETURN
+    SUMMARIZE(
+        CALCULATETABLE(
+            ExistingTable,
+            ExistingTable[Region] IN SelectedRegions,    -- Filter based on selected regions
+            ExistingTable[Year] IN SelectedYears         -- Filter based on selected years
+        ),
+        ExistingTable[Category],                          -- Row 1: Category
+        ExistingTable[SubCategory],                       -- Row 2: SubCategory
+        ADDCOLUMNS(
+            DistinctQuarters,                            -- Iterate over each distinct quarter
+            "Sales", CALCULATE(SUM(ExistingTable[SalesAmount]), ExistingTable[Quarter] = [Quarter])  -- Calculate sales for each quarter
+        )
+    )
