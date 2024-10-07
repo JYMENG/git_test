@@ -1,87 +1,11 @@
-Sub CopyFilteredData(sourceTab As String, targetTab As String)
-    Dim sourceWS As Worksheet
-    Dim targetWB As Workbook
-    Dim targetWS As Worksheet
-    Dim lastRowSource As Long, lastRowTarget As Long
-    Dim sourceKeyCol As Integer, sourceStatusCol As Integer
-    Dim targetFile As String
-    Dim visibleRange As Range
-    Dim keyValue As Variant
-    Dim checkKey As Range
-    Dim row As Range
-    
-    ' Set source worksheet dynamically
-    Set sourceWS = ThisWorkbook.Sheets(sourceTab)
-    
-    ' Define column indices
-    sourceKeyCol = 1 ' Assuming the key is in column A
-    sourceStatusCol = 2 ' Assuming the "Status" is in column B
-    
-    ' Define the target workbook path
-    targetFile = "C:\path\to\destination\file.xlsx" ' Update to your actual target workbook path
-    
-    ' Open the destination workbook
-    On Error Resume Next
-    Set targetWB = Workbooks.Open(targetFile)
-    On Error GoTo 0
-    
-    If targetWB Is Nothing Then
-        MsgBox "The target workbook could not be opened.", vbExclamation
-        Exit Sub
-    End If
-    
-    ' Set the target worksheet
-    Set targetWS = targetWB.Sheets(targetTab)
-    
-    ' Get the last row in the source sheet
-    lastRowSource = sourceWS.Cells(sourceWS.Rows.Count, sourceKeyCol).End(xlUp).Row
-    
-    ' Apply the filter to the Status column for TRUE values
-    With sourceWS
-        .AutoFilterMode = False ' Remove any existing filters
-        .Range(.Cells(1, 1), .Cells(lastRowSource, sourceStatusCol)).AutoFilter Field:=sourceStatusCol, Criteria1:=True
-    End With
-    
-    ' Check if there are any visible rows after filtering
-    On Error Resume Next
-    Set visibleRange = sourceWS.Range("A2:A" & lastRowSource).SpecialCells(xlCellTypeVisible)
-    On Error GoTo 0
-    
-    If visibleRange Is Nothing Then
-        MsgBox "No rows with Status = TRUE found.", vbInformation
-        sourceWS.AutoFilterMode = False ' Clear the filter
-        targetWB.Close False
-        Exit Sub
-    End If
-    
-    ' Get the last row in the target sheet
-    lastRowTarget = targetWS.Cells(targetWS.Rows.Count, sourceKeyCol).End(xlUp).Row
-    
-    ' Loop through visible rows in the filtered range
-    For Each row In visibleRange
-        keyValue = sourceWS.Cells(row.Row, sourceKeyCol).Value
-        
-        ' Check if the key exists in the target sheet
-        Set checkKey = targetWS.Columns(sourceKeyCol).Find(What:=keyValue, LookIn:=xlValues, LookAt:=xlWhole)
-        
-        If Not checkKey Is Nothing Then
-            ' Key exists, show message and quit
-            MsgBox "Key '" & keyValue & "' already exists in the target sheet. Operation aborted.", vbExclamation
-            sourceWS.AutoFilterMode = False ' Clear the filter
-            targetWB.Close False
-            Exit Sub
-        Else
-            ' Append the visible rows to the target sheet
-            lastRowTarget = lastRowTarget + 1
-            sourceWS.Rows(row.Row).Copy targetWS.Rows(lastRowTarget)
-        End If
-    Next row
-    
-    ' Clear the filter
-    sourceWS.AutoFilterMode = False
-    
-    ' Save and close the target workbook
-    targetWB.Close SaveChanges:=True
-    
-    MsgBox "Data copied successfully.", vbInformation
-End Sub
+FilteredSummarizedTable = 
+SUMMARIZE(
+    CALCULATETABLE(
+        ExistingTable, 
+        ExistingTable[Region] IN VALUES(ExistingTable[Region])  -- Slicer-driven filter
+    ),
+    ExistingTable[Category],                        -- Row 1
+    ExistingTable[SubCategory],                     -- Row 2
+    ExistingTable[Year],                            -- Column
+    "Total Sales", SUM(ExistingTable[SalesAmount])  -- Summarized Value
+)
