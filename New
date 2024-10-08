@@ -1,16 +1,24 @@
-NewColumn = 
+NewColumn =
+VAR CurrentRowIndex = INDEX()   // Get the index of the current row
 VAR PreviousRowValue = 
     IF(
-        EARLIER('Table'[ID]) <> BLANK(),
-        CALCULATE(MAX('Table'[YourColumn]), FILTER('Table', 'Table'[ID] = EARLIER('Table'[ID]) - 1))
+        CurrentRowIndex > 1,  // Check if it's not the first row
+        LOOKUPVALUE('Table'[YourColumn], 'Table'[Index], CurrentRowIndex - 1),  // Get the value of the previous row
+        BLANK()
     )
-RETURN 
+VAR PreviousNewColumnValue = 
     IF(
-        ISBLANK(PreviousRowValue),
-        1,  // Assign 1 to the first row
+        CurrentRowIndex > 1,  // If it's not the first row
+        LOOKUPVALUE('Table'[NewColumn], 'Table'[Index], CurrentRowIndex - 1),  // Get the value of this new column in the previous row
+        1  // For the first row, start with 1
+    )
+RETURN
+    IF(
+        CurrentRowIndex = 1, 
+        1,  // For the first row, assign 1
         IF(
             'Table'[YourColumn] = PreviousRowValue,
-            PreviousRowValue,  // Keep the previous value if the current and previous values are the same
-            PreviousRowValue + 1  // Increment the value if different from the previous row
+            PreviousNewColumnValue,  // If current value is the same as the previous one, assign previous new column value
+            PreviousNewColumnValue + 1  // Otherwise, increment by 1
         )
     )
