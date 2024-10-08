@@ -1,24 +1,22 @@
-NewColumn =
-VAR CurrentRowIndex = INDEX()   // Get the index of the current row
-VAR PreviousRowValue = 
-    IF(
-        CurrentRowIndex > 1,  // Check if it's not the first row
-        LOOKUPVALUE('Table'[YourColumn], 'Table'[Index], CurrentRowIndex - 1),  // Get the value of the previous row
-        BLANK()
+NewColumn = 
+VAR CurrentIndex = 'Table'[Index]  // Using the Index column created in Power Query
+VAR PreviousValue = 
+    CALCULATE(
+        MAX('Table'[YourColumn]), 
+        FILTER('Table', 'Table'[Index] = CurrentIndex - 1)
     )
 VAR PreviousNewColumnValue = 
-    IF(
-        CurrentRowIndex > 1,  // If it's not the first row
-        LOOKUPVALUE('Table'[NewColumn], 'Table'[Index], CurrentRowIndex - 1),  // Get the value of this new column in the previous row
-        1  // For the first row, start with 1
+    CALCULATE(
+        MAX('Table'[NewColumn]), 
+        FILTER('Table', 'Table'[Index] = CurrentIndex - 1)
     )
-RETURN
+RETURN 
     IF(
-        CurrentRowIndex = 1, 
-        1,  // For the first row, assign 1
+        CurrentIndex = 1, 
+        1,  // If it's the first row, set to 1
         IF(
-            'Table'[YourColumn] = PreviousRowValue,
-            PreviousNewColumnValue,  // If current value is the same as the previous one, assign previous new column value
-            PreviousNewColumnValue + 1  // Otherwise, increment by 1
+            'Table'[YourColumn] = PreviousValue,
+            PreviousNewColumnValue,  // If current value matches the previous, use the same value
+            PreviousNewColumnValue + 1  // Else, increment by 1
         )
     )
