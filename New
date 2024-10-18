@@ -1,22 +1,11 @@
-NewColumn = 
-VAR CurrentIndex = 'Table'[Index]  // Using the Index column created in Power Query
-VAR PreviousValue = 
-    CALCULATE(
-        MAX('Table'[YourColumn]), 
-        FILTER('Table', 'Table'[Index] = CurrentIndex - 1)
-    )
-VAR PreviousNewColumnValue = 
-    CALCULATE(
-        MAX('Table'[NewColumn]), 
-        FILTER('Table', 'Table'[Index] = CurrentIndex - 1)
-    )
-RETURN 
-    IF(
-        CurrentIndex = 1, 
-        1,  // If it's the first row, set to 1
-        IF(
-            'Table'[YourColumn] = PreviousValue,
-            PreviousNewColumnValue,  // If current value matches the previous, use the same value
-            PreviousNewColumnValue + 1  // Else, increment by 1
-        )
-    )
+FilteredDynamicPivotTable = 
+SUMMARIZE(
+    FILTER(
+        'YourTable',
+        'YourTable'[SomeColumn] = "SomeValue"  -- Apply your filter condition here
+    ),
+    'YourTable'[PivotColumn1],
+    'YourTable'[PivotColumn2],
+    "Measure1", CALCULATE(SUM('YourTable'[MeasureColumn]), ALL('YourTable'[PivotColumnToExclude])),
+    "Measure2", CALCULATE(SUM('YourTable'[AnotherMeasure]), ALL('YourTable'[PivotColumnToExclude]))
+)
