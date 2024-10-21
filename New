@@ -1,11 +1,13 @@
-FilteredDynamicPivotTable = 
-SUMMARIZE(
-    FILTER(
-        'YourTable',
-        'YourTable'[SomeColumn] = "SomeValue"  -- Apply your filter condition here
-    ),
-    'YourTable'[PivotColumn1],
-    'YourTable'[PivotColumn2],
-    "Measure1", CALCULATE(SUM('YourTable'[MeasureColumn]), ALL('YourTable'[PivotColumnToExclude])),
-    "Measure2", CALCULATE(SUM('YourTable'[AnotherMeasure]), ALL('YourTable'[PivotColumnToExclude]))
-)
+MonthEndDates = 
+VAR StartDate = DATE(2020, 1, 1)  // Adjust as needed
+VAR EndDate = DATE(2030, 12, 31)  // Adjust as needed
+RETURN
+    DISTINCT(
+        SELECTCOLUMNS(
+            ADDCOLUMNS(
+                CALENDAR(StartDate, EndDate),
+                "MonthEndDate", EOMONTH([Date], 0)
+            ),
+            "MonthEndDate", [MonthEndDate]
+        )
+    )
