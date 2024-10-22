@@ -1,13 +1,1 @@
-MonthEndDates = 
-VAR StartDate = DATE(2020, 1, 1)  // Adjust as needed
-VAR EndDate = DATE(2030, 12, 31)  // Adjust as needed
-RETURN
-    DISTINCT(
-        SELECTCOLUMNS(
-            ADDCOLUMNS(
-                CALENDAR(StartDate, EndDate),
-                "MonthEndDate", EOMONTH([Date], 0)
-            ),
-            "MonthEndDate", [MonthEndDate]
-        )
-    )
+=TEXTJOIN("", TRUE, IF(ISNUMBER(--MID(A1, ROW(INDIRECT("1:" & LEN(A1))), 1), MID(A1, ROW(INDIRECT("1:" & LEN(A1))), 1), ""))
