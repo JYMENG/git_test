@@ -1,1 +1,22 @@
-=TEXTJOIN("", TRUE, FILTER(MID(A1, ROW(INDIRECT("1:" & LEN(A1))), 1), ISNUMBER(--MID(A1, ROW(INDIRECT("1:" & LEN(A1))), 1))))
+FindingsSummary = 
+VAR ProductsTable =
+    SUMMARIZE(
+        Findings,
+        Findings[Product],
+        "TotalFindings", COUNTROWS(Findings)
+    )
+
+VAR NonZeroProducts =
+    FILTER(ProductsTable, [TotalFindings] > 0)
+
+VAR TotalFindingsCount = SUMX(NonZeroProducts, [TotalFindings])
+
+RETURN
+    "There are a total of " & 
+    TotalFindingsCount & 
+    " findings for " & 
+    CONCATENATEX(NonZeroProducts, 
+        Findings[Product] & ": " & [TotalFindings], 
+        ", ", 
+        ", and "
+    )
