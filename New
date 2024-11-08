@@ -1,22 +1,47 @@
-FindingsSummary = 
-VAR ProductsTable =
-    SUMMARIZE(
-        Findings,
-        Findings[Product],
-        "TotalFindings", COUNTROWS(Findings)
-    )
+import pyodbc
+import pandas as pd
+from datetime import datetime
 
-VAR NonZeroProducts =
-    FILTER(ProductsTable, [TotalFindings] > 0)
+# 1. Set up the connection to SQL Server
+conn = pyodbc.connect('DRIVER={ODBC Driver 17 for SQL Server};'
+                      'SERVER=your_server_name;'
+                      'DATABASE=your_database_name;'
+                      'UID=your_username;'
+                      'PWD=your_password')
 
-VAR TotalFindingsCount = SUMX(NonZeroProducts, [TotalFindings])
+cursor = conn.cursor()
 
-RETURN
-    "There are a total of " & 
-    TotalFindingsCount & 
-    " findings for " & 
-    CONCATENATEX(NonZeroProducts, 
-        Findings[Product] & ": " & [TotalFindings], 
-        ", ", 
-        ", and "
-    )
+# 2. Read data from a CSV file into a DataFrame
+df = pd.read_csv('path_to_your_file.csv')
+
+# 3. Loop through the data in the file
+for index, row in df.iterrows():
+    # Exclude the date field (replace 'date_field_name' with your actual column name)
+    row_data = row.drop('date_field_name')
+
+    # 4. Check if the record exists in the SQL Server table
+    # Build a dynamic query to compare all fields except for the date field
+    placeholders = ' AND '.join([f"{col} = ?" for col in row_data.index])
+    query = f"SELECT COUNT(*) FROM your_table WHERE {placeholders}"
+    
+    # Execute the query
+    cursor.execute(query, tuple(row_data))
+    count = cursor.fetchone()[0]
+
+    # 5. If the record does not exist, insert it with today's date
+    if count == 0:
+        # Prepare the columns and values for the insert statement
+        columns = ', '.join(row_data.index) + ', date_field_name'
+        values = tuple(row_data) + (datetime.today().strftime('%Y-%m-%d'),)
+        
+        insert_query = f"INSERT INTO your_table ({columns}) VALUES ({', '.join(['?' for _ in values])})"
+        
+        cursor.execute(insert_query, values)
+        conn.commit()
+        print(f"Inserted: {row_data['column_name']}")  # Customize this print message based on your column name
+    else:
+        print(f"Record already exists: {row_data['column_name']}")  # Customize the message
+
+# 6. Close the connection
+cursor.close()
+conn.close()
