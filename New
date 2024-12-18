@@ -1,40 +1,24 @@
-import csv
+import pandas as pd
 
 # File paths
 file1_path = 'file1.csv'
 file2_path = 'file2.csv'
 output_path = 'joined_file.csv'
 
-# Read file2 into a dictionary based on the key column
-file2_data = {}
-with open(file2_path, 'r') as file2:
-    reader = csv.reader(file2, delimiter=',')  # Adjust delimiter if needed
-    header2 = next(reader)  # Skip header
-    for row in reader:
-        key = row[0]  # Assuming the key column is the first column
-        file2_data[key] = row
+# Read the files into pandas DataFrames
+df1 = pd.read_csv(file1_path)  # Adjust delimiter if needed
+df2 = pd.read_csv(file2_path)  # Adjust delimiter if needed
 
-# Read file1 and select unique records based on the key column
-file1_data = {}
-with open(file1_path, 'r') as file1:
-    reader = csv.reader(file1, delimiter=',')  # Adjust delimiter if needed
-    header1 = next(reader)  # Skip header
-    for row in reader:
-        key = row[0]  # Assuming the key column is the first column
-        file1_data[key] = row  # Keep only the unique records (duplicates will be overwritten)
+# Select specific columns from df1 (e.g., only 'Key' and 'Name')
+df1_filtered = df1[['Key', 'Name']]  # Replace 'Key' and 'Name' with the desired columns
 
-# Join file1 (unique records) with file2 on the key column
-joined_rows = []
-joined_rows.append(header1 + header2[1:])  # Join headers
+# Select unique records from df1_filtered based on the key column
+df1_unique = df1_filtered.drop_duplicates(subset='Key', keep='last')  # Keeps the last occurrence of each key
 
-for key, row in file1_data.items():
-    if key in file2_data:
-        joined_row = row + file2_data[key][1:]  # Join data based on the key
-        joined_rows.append(joined_row)
+# Perform the join on the key column (assumed to be 'Key')
+df_joined = pd.merge(df1_unique, df2, on='Key', how='inner')  # You can change 'inner' to 'left', 'right', etc.
 
-# Write the joined data to the output file
-with open(output_path, 'w', newline='') as output_file:
-    writer = csv.writer(output_file, delimiter=',')  # Adjust delimiter if needed
-    writer.writerows(joined_rows)
+# Write the joined DataFrame to the output file
+df_joined.to_csv(output_path, index=False)
 
 print(f"Joined data written to {output_path}")
