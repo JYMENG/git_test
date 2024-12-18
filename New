@@ -1,52 +1,40 @@
 import csv
-import os
 
-# Folder path containing the files
-folder_path = 'path_to_folder'
-file2_path = 'file2.csv'  # File containing the list of valid users
-output_path = 'all_matched_records.csv'
+# File paths
+file1_path = 'file1.csv'
+file2_path = 'file2.csv'
+output_path = 'joined_file.csv'
 
-# Step 1: Read users from file2.csv into a set
-valid_users = set()
+# Read file2 into a dictionary based on the key column
+file2_data = {}
 with open(file2_path, 'r') as file2:
-    reader = csv.reader(file2)
-    header = next(reader)  # Skip the header if present
+    reader = csv.reader(file2, delimiter=',')  # Adjust delimiter if needed
+    header2 = next(reader)  # Skip header
     for row in reader:
-        valid_users.add(row[0])  # Assuming 'User' is in the first column
+        key = row[0]  # Assuming the key column is the first column
+        file2_data[key] = row
 
-# Step 2: Search all files in the folder for matched Record_IDs
-matched_record_ids = set()
-for filename in os.listdir(folder_path):
-    if filename.endswith('.csv'):  # Process only CSV files
-        file_path = os.path.join(folder_path, filename)
-        with open(file_path, 'r') as file:
-            reader = csv.reader(file)
-            header = next(reader)  # Skip the header
-            for row in reader:
-                # Check if Manager 1 or Manager 2 matches a valid user
-                if row[1] in valid_users or row[2] in valid_users:  # Manager 1 or Manager 2
-                    matched_record_ids.add(row[0])  # Collect the Record_ID
+# Read file1 and select unique records based on the key column
+file1_data = {}
+with open(file1_path, 'r') as file1:
+    reader = csv.reader(file1, delimiter=',')  # Adjust delimiter if needed
+    header1 = next(reader)  # Skip header
+    for row in reader:
+        key = row[0]  # Assuming the key column is the first column
+        file1_data[key] = row  # Keep only the unique records (duplicates will be overwritten)
 
-# Step 3: Extract all records with matched Record_IDs across all files
-all_matched_records = []
-header_written = False  # To ensure we write the header only once
+# Join file1 (unique records) with file2 on the key column
+joined_rows = []
+joined_rows.append(header1 + header2[1:])  # Join headers
 
-for filename in os.listdir(folder_path):
-    if filename.endswith('.csv'):  # Process only CSV files
-        file_path = os.path.join(folder_path, filename)
-        with open(file_path, 'r') as file:
-            reader = csv.reader(file)
-            header = next(reader)  # Read the header
-            if not header_written:
-                all_matched_records.append(header)  # Write header once
-                header_written = True
-            for row in reader:
-                if row[0] in matched_record_ids:  # Check if Record_ID matches
-                    all_matched_records.append(row)
+for key, row in file1_data.items():
+    if key in file2_data:
+        joined_row = row + file2_data[key][1:]  # Join data based on the key
+        joined_rows.append(joined_row)
 
-# Step 4: Write all matched records to a new file
+# Write the joined data to the output file
 with open(output_path, 'w', newline='') as output_file:
-    writer = csv.writer(output_file)
-    writer.writerows(all_matched_records)
+    writer = csv.writer(output_file, delimiter=',')  # Adjust delimiter if needed
+    writer.writerows(joined_rows)
 
-print(f"All matched records written to {output_path}")
+print(f"Joined data written to {output_path}")
