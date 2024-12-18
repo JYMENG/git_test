@@ -1,8 +1,9 @@
 import csv
+import os
 
-# File paths
-file1_path = 'file1.csv'
-file2_path = 'file2.csv'
+# Folder path containing the files
+folder_path = 'path_to_folder'
+file2_path = 'file2.csv'  # File containing the list of valid users
 output_path = 'all_matched_records.csv'
 
 # Step 1: Read users from file2.csv into a set
@@ -13,24 +14,35 @@ with open(file2_path, 'r') as file2:
     for row in reader:
         valid_users.add(row[0])  # Assuming 'User' is in the first column
 
-# Step 2: Find matched Record_IDs based on Manager 1 or Manager 2
+# Step 2: Search all files in the folder for matched Record_IDs
 matched_record_ids = set()
-with open(file1_path, 'r') as file1:
-    reader = csv.reader(file1)
-    header = next(reader)  # Skip the header
-    for row in reader:
-        if row[1] in valid_users or row[2] in valid_users:  # Manager 1 or Manager 2 match
-            matched_record_ids.add(row[0])  # Collect the Record_ID
+for filename in os.listdir(folder_path):
+    if filename.endswith('.csv'):  # Process only CSV files
+        file_path = os.path.join(folder_path, filename)
+        with open(file_path, 'r') as file:
+            reader = csv.reader(file)
+            header = next(reader)  # Skip the header
+            for row in reader:
+                # Check if Manager 1 or Manager 2 matches a valid user
+                if row[1] in valid_users or row[2] in valid_users:  # Manager 1 or Manager 2
+                    matched_record_ids.add(row[0])  # Collect the Record_ID
 
-# Step 3: Extract all records from file1 with matched Record_IDs
+# Step 3: Extract all records with matched Record_IDs across all files
 all_matched_records = []
-with open(file1_path, 'r') as file1:
-    reader = csv.reader(file1)
-    header = next(reader)  # Read the header
-    all_matched_records.append(header)  # Include header in the output
-    for row in reader:
-        if row[0] in matched_record_ids:  # Check if Record_ID matches
-            all_matched_records.append(row)
+header_written = False  # To ensure we write the header only once
+
+for filename in os.listdir(folder_path):
+    if filename.endswith('.csv'):  # Process only CSV files
+        file_path = os.path.join(folder_path, filename)
+        with open(file_path, 'r') as file:
+            reader = csv.reader(file)
+            header = next(reader)  # Read the header
+            if not header_written:
+                all_matched_records.append(header)  # Write header once
+                header_written = True
+            for row in reader:
+                if row[0] in matched_record_ids:  # Check if Record_ID matches
+                    all_matched_records.append(row)
 
 # Step 4: Write all matched records to a new file
 with open(output_path, 'w', newline='') as output_file:
