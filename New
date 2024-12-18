@@ -1,7 +1,30 @@
-[Name] has been an exceptional project manager and business analyst, consistently delivering outstanding support to our team. Their professional demeanor and efficient work ethic have been pivotal in ensuring the smooth progress of our projects. Always approachable and easy to communicate with, [Name] fosters an environment where team members feel comfortable sharing ideas, addressing challenges, and collaborating effectively.
+import os
+import pandas as pd
 
-One of [Name]’s standout qualities is their proactive approach to identifying innovative solutions. They don’t just wait for problems to arise; instead, they anticipate potential obstacles and find new ways to optimize workflows, improve processes, and enhance project outcomes. This foresight has saved countless hours and resources, ensuring projects are completed on time and often exceeding expectations.
+def get_unique_ids(user_list_file, folder_path, id_column, user_column):
+    # Step 1: Read the in-scope user list into a set
+    inscope_users = set(pd.read_csv(user_list_file)[user_column])
+    
+    unique_ids = set()
+    
+    # Step 2: Iterate through all files in the folder
+    for file_name in os.listdir(folder_path):
+        file_path = os.path.join(folder_path, file_name)
+        if os.path.isfile(file_path) and file_name.endswith('.csv'):  # Assuming CSV files
+            # Step 3: Read each file and filter records
+            df = pd.read_csv(file_path)
+            filtered = df[df[user_column].isin(inscope_users)]
+            unique_ids.update(filtered[id_column])
+    
+    return unique_ids
 
-[Name] is also highly organized, adept at managing multiple priorities, and remains calm under pressure, which sets an excellent example for the rest of the team. Their ability to break down complex tasks into manageable steps has been invaluable in driving productivity and keeping stakeholders informed and engaged throughout the project lifecycle.
+# Example usage:
+user_list_file = "path_to_user_list.csv"  # File containing in-scope user list
+folder_path = "path_to_folder_with_files"  # Folder containing files to scan
+id_column = "ID"  # Column with unique IDs
+user_column = "User"  # Column with user names or IDs
 
-Overall, [Name] is a trusted and reliable team member who balances professionalism with a friendly, approachable style. Their dedication to excellence and continuous improvement makes them an invaluable asset to any team or organization.
+unique_ids = get_unique_ids(user_list_file, folder_path, id_column, user_column)
+
+# Output results
+print(f"Unique IDs: {unique_ids}")
