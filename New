@@ -1,52 +1,37 @@
-import csv
+import pandas as pd
 
-# File paths
-file1_path = 'file1.csv'  # Input file 1 (contains User and Path)
-file2_path = 'file2.csv'  # Input file 2 (contains Name and ID)
-output_path = 'output.csv'  # Output file
+# Specify your input and output file paths
+input_file = 'your_large_file.csv'  # Replace with your file path
+output_file = 'flattened_output.csv'  # Output file
 
-# Step 1: Extract User and Path from File 1
-file1_data = []  # Store rows with User and Path columns
-with open(file1_path, 'r') as file1:
-    reader = csv.reader(file1, delimiter=',')  # Adjust delimiter if needed
-    header1 = next(reader)  # Read the header row
+# Define the columns you want to keep in the final output
+keep_columns = ['Column1', 'Column2', 'Column3']  # Replace with actual column names
+flatten_columns = ['User', 'Time', 'Status']  # Columns to flatten
 
-    # Get indices of User and Path columns
-    user_index = header1.index('User')
-    path_index = header1.index('Path')
+# Initialize an empty DataFrame to accumulate results
+processed_chunks = []
 
-    for row in reader:
-        # Keep only User and Path columns
-        file1_data.append((row[user_index].strip().lower(), row[path_index].strip()))  # Normalize User to lowercase
+# Read the file in chunks
+chunksize = 50000  # Adjust chunk size based on your memory capacity
+for chunk in pd.read_csv(input_file, chunksize=chunksize):
+    # Sort by ID and Time columns
+    chunk_sorted = chunk.sort_values(by=['ID', 'Time'])
+    
+    # Flatten User, Time, and Status columns based on ID
+    chunk_grouped = chunk_sorted.groupby('ID').agg({
+        'User': lambda x: ', '.join(x),
+        'Time': lambda x: ', '.join(x),
+        'Status': lambda x: ', '.join(x),
+        **{col: 'first' for col in keep_columns}  # Keep first for the specified columns
+    }).reset_index()
+    
+    # Append to the list of processed chunks
+    processed_chunks.append(chunk_grouped)
 
-# Step 2: Extract unique Name and ID from File 2
-file2_data = {}  # Dictionary to store unique Name -> ID mappings
-with open(file2_path, 'r') as file2:
-    reader = csv.reader(file2, delimiter=',')  # Adjust delimiter if needed
-    header2 = next(reader)  # Read the header row
+# Concatenate all chunks into a single DataFrame
+final_result = pd.concat(processed_chunks, ignore_index=True)
 
-    # Get indices of Name and ID columns
-    name_index = header2.index('Name')
-    id_index = header2.index('ID')
+# Write the final result to a new CSV file
+final_result.to_csv(output_file, index=False)
 
-    for row in reader:
-        # Normalize Name to lowercase and keep unique Name -> ID mapping
-        name_lower = row[name_index].strip().lower()
-        id_value = row[id_index].strip()
-        if name_lower not in file2_data:
-            file2_data[name_lower] = id_value
-
-# Step 3: Perform an inner join on User (File 1) and Name (File 2)
-output_rows = []  # Store the resulting rows
-output_rows.append(['User', 'Path', 'ID'])  # Header for the output file
-
-for user, path in file1_data:
-    if user in file2_data:  # Check if User exists in File 2 data
-        output_rows.append([user, path, file2_data[user]])
-
-# Step 4: Write the output file
-with open(output_path, 'w', newline='') as output_file:
-    writer = csv.writer(output_file, delimiter=',')  # Adjust delimiter if needed
-    writer.writerows(output_rows)
-
-print(f"Joined records written to {output_path}")
+print("Processing complete. Output saved to:", output_file)
