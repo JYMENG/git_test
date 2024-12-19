@@ -3,28 +3,36 @@ import os
 import re
 
 # File paths
-merged_file_path = 'merged_output.csv'  # The merged dataset
-output_dir = 'output_files'  # Directory to save the split files
+file1_path = 'file1.csv'  # First file
+file2_path = 'file2.csv'  # Second file
+output_dir = 'output_files'  # Directory to save the output files
 
 # Ensure the output directory exists
 os.makedirs(output_dir, exist_ok=True)
 
-# Define chunk size for processing large files
-chunksize = 50000  # Number of rows per chunk
+# Chunk size to handle large files
+chunksize = 50000  # Adjust this based on available memory
 
-# Process the merged file in chunks
-for chunk in pd.read_csv(merged_file_path, chunksize=chunksize, encoding='ISO-8859-1'):
-    # Split the target column (e.g., 'split_column') by delimiter '!' and extract the 4th item
-    chunk['split_item'] = chunk['split_column'].str.split('!').str[3]
-    
-    # Handle cases where the 4th item is missing: fall back to the 3rd item
-    chunk['split_item'] = chunk['split_item'].fillna(chunk['split_column'].str.split('!').str[2])
+# Read the first file in chunks
+for chunk1 in pd.read_csv(file1_path, chunksize=chunksize, encoding='ISO-8859-1'):
+    # Read the second file in chunks
+    for chunk2 in pd.read_csv(file2_path, chunksize=chunksize, encoding='ISO-8859-1'):
+        # Perform inner join on the two chunks (adjust 'ID' to the appropriate join column)
+        merged_chunk = pd.merge(chunk1, chunk2, on='ID', how='inner')
+        
+        # Process the split_column: extract the 4th item from 'split_column' split by '!'
+        merged_chunk['split_item'] = merged_chunk['split_column'].str.split('!').str[3]
+        
+        # Handle cases where the 4th item is missing: fallback to the 3rd item
+        merged_chunk['split_item'] = merged_chunk['split_item'].fillna(merged_chunk['split_column'].str.split('!').str[2])
 
-    # Retain only alphabetic characters in the extracted item
-    chunk['split_item_cleaned'] = chunk['split_item'].apply(lambda x: ''.join(re.findall('[a-zA-Z]+', str(x))) if pd.notnull(x) else 'unknown')
+        # Retain only alphabetic characters in the extracted value
+        merged_chunk['split_item_cleaned'] = merged_chunk['split_item'].apply(
+            lambda x: ''.join(re.findall('[a-zA-Z]+', str(x))) if pd.notnull(x) else 'unknown'
+        )
 
-    # Split the chunk into separate files based on the cleaned split item
-    for name, group in chunk.groupby('split_item_cleaned'):
-        output_file = os.path.join(output_dir, f"{name}.csv")
-        # Append rows to the file if it already exists
-        group.to_csv(output_file, mode='a', index=False, header=not os.path.exists(output_file))
+        # Group rows by the cleaned split item and save to separate files
+        for name, group in merged_chunk.groupby('split_item_cleaned'):
+            output_file = os.path.join(output_dir, f"{name}.csv")
+            # Append rows to the file if it already exists
+            group.to_csv(output_file, mode='a', index=False, header=not os.path.exists(output_file))
