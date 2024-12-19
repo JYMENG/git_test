@@ -1,44 +1,28 @@
 import pandas as pd
-import os
 
 # File paths
 file1_path = 'file1.csv'  # Replace with your first file path
 file2_path = 'file2.csv'  # Replace with your second file path
-output_dir = 'output_files'  # Directory to save the output files
-os.makedirs(output_dir, exist_ok=True)  # Create output directory if it doesn't exist
+output_file_path = 'merged_output.csv'  # Output file path
 
-# Define the chunk size (adjust this based on your system's memory capacity)
-chunksize = 50000  # Adjust based on your available memory
+# Define chunk size (adjust this based on your system's memory capacity)
+chunksize = 50000  # Number of rows per chunk
 
-# Function to process and save chunk
-def process_chunk(chunk1, chunk2):
-    # Merge the two chunks on the common column (e.g., 'ID')
-    df_joined = pd.merge(chunk1, chunk2, on='ID', how='inner')  # Adjust 'how' as needed
+# Initialize a flag to determine if the output file already exists (for headers)
+output_exists = False
 
-    # Split the 'YourColumn' text by delimiter (e.g., comma)
-    split_column = df_joined['YourColumn'].str.split(',', expand=True)
+# Read the first file in chunks and process each chunk
+for chunk1 in pd.read_csv(file1_path, chunksize=chunksize, encoding='ISO-8859-1'):
+    # Read the second file in chunks
+    for chunk2 in pd.read_csv(file2_path, chunksize=chunksize, encoding='ISO-8859-1'):
+        # Perform the inner join (adjust 'on' parameter to your join key column)
+        merged_chunk = pd.merge(chunk1, chunk2, on='ID', how='inner')
 
-    # Choose the 4th column (index 3), fallback to 3rd column (index 2) if missing
-    df_joined['ChosenColumn'] = split_column[3]  # Default to 4th column
-    df_joined['ChosenColumn'] = df_joined['ChosenColumn'].fillna(split_column[2])  # Fallback to 3rd if 4th is missing
+        # Write the result to the output file, append if file exists
+        merged_chunk.to_csv(output_file_path, mode='a', header=not output_exists, index=False)
+        output_exists = True  # After the first chunk, set header=False for subsequent chunks
 
-    # Sort the dataframe by 'ID' and 'Time' columns
-    df_joined_sorted = df_joined.sort_values(by=['ID', 'Time'])
+    # You can break after the first pass of chunk2 if you only need one join for each chunk1
+    break
 
-    # Iterate over unique values of 'ChosenColumn' and save separate files
-    for value in df_joined_sorted['ChosenColumn'].unique():
-        # Filter rows based on the split value of 'ChosenColumn'
-        df_filtered = df_joined_sorted[df_joined_sorted['ChosenColumn'] == value]
-        
-        # Create output filename based on the value, strip spaces to avoid file naming issues
-        output_filename = os.path.join(output_dir, f"{value.strip()}.csv")
-        
-        # Append to file or create new file
-        df_filtered.to_csv(output_filename, mode='a', header=not os.path.exists(output_filename), index=False)
-        print(f"Saved {output_filename}")
-
-# Process the files in chunks
-for chunk1, chunk2 in zip(pd.read_csv(file1_path, chunksize=chunksize), pd.read_csv(file2_path, chunksize=chunksize)):
-    process_chunk(chunk1, chunk2)
-
-print("Processing complete.")
+print("Merging complete.")
