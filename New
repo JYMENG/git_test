@@ -1,45 +1,50 @@
 import csv
 
 # File paths
-file1_path = 'file1.csv'
-file2_path = 'file2.csv'
-output_path = 'joined_file.csv'
+file1_path = 'file1.csv'  # Contains ID, PM
+file2_path = 'file2.csv'  # Contains Name, Path
+output_path = 'unique_records.csv'
 
-# Step 1: Read file2 into a dictionary (convert key column to lowercase)
+# Step 1: Read File 2 into a dictionary (keyed by lowercase Name)
 file2_data = {}
 with open(file2_path, 'r') as file2:
     reader = csv.reader(file2, delimiter=',')  # Adjust delimiter if needed
-    header2 = next(reader)  # Skip header
-    key2_index = header2.index('Key2')  # Adjust to the actual key column in file2
-    department_index = header2.index('Department')  # Adjust to the actual department column
-    
-    for row in reader:
-        key2_lower = row[key2_index].lower()  # Convert the key to lowercase
-        file2_data[key2_lower] = row  # Store the row with lowercase key
+    header2 = next(reader)  # Skip the header
+    name_index = header2.index('Name')  # Index of the Name column
+    path_index = header2.index('Path')  # Index of the Path column
 
-# Step 2: Read file1, convert key column to lowercase, and join with file2 data
-joined_rows = []
+    for row in reader:
+        name_lower = row[name_index].strip().lower()  # Normalize Name to lowercase
+        file2_data[name_lower] = row[path_index]  # Map Name to Path
+
+# Step 2: Process File 1 to find unique records and join with File 2
+unique_records = set()  # Track unique (ID, PM) combinations
+output_rows = []  # Store the resulting rows
+
 with open(file1_path, 'r') as file1:
     reader = csv.reader(file1, delimiter=',')  # Adjust delimiter if needed
-    header1 = next(reader)  # Skip header
-    key1_index = header1.index('Key1')  # Adjust to the actual key column in file1
-    name_index = header1.index('Name')  # Adjust to the actual name column in file1
-    
-    # Create the joined header
-    joined_header = header1 + ['Department']  # Add 'Department' from file2
-    joined_rows.append(joined_header)
-    
-    for row in reader:
-        key1_lower = row[key1_index].lower()  # Convert the key to lowercase
-        
-        if key1_lower in file2_data:
-            # If match found in file2, add the department to the row
-            joined_row = row + [file2_data[key1_lower][department_index]]
-            joined_rows.append(joined_row)
+    header1 = next(reader)  # Read the header row
+    id_index = header1.index('ID')  # Index of the ID column
+    pm_index = header1.index('PM')  # Index of the PM column
 
-# Step 3: Write the joined rows to a new file
+    # Prepare the output header
+    output_header = header1 + ['Path']  # Add the Path column to the output
+    output_rows.append(output_header)
+
+    for row in reader:
+        id_value = row[id_index].strip()
+        pm_lower = row[pm_index].strip().lower()  # Normalize PM to lowercase
+        unique_key = (id_value, pm_lower)  # Combine ID and PM for uniqueness
+
+        # Check uniqueness and join condition
+        if unique_key not in unique_records and pm_lower in file2_data:
+            unique_records.add(unique_key)  # Mark this (ID, PM) as seen
+            joined_row = row + [file2_data[pm_lower]]  # Add Path from File 2
+            output_rows.append(joined_row)
+
+# Step 3: Write the unique joined records to the output file
 with open(output_path, 'w', newline='') as output_file:
     writer = csv.writer(output_file, delimiter=',')  # Adjust delimiter if needed
-    writer.writerows(joined_rows)
+    writer.writerows(output_rows)
 
-print(f"Joined data written to {output_path}")
+print(f"Unique joined records written to {output_path}")
