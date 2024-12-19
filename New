@@ -1,50 +1,52 @@
 import csv
 
 # File paths
-file1_path = 'file1.csv'  # Contains ID, PM
-file2_path = 'file2.csv'  # Contains Name, Path
-output_path = 'unique_records.csv'
+file1_path = 'file1.csv'  # Input file 1 (contains User and Path)
+file2_path = 'file2.csv'  # Input file 2 (contains Name and ID)
+output_path = 'output.csv'  # Output file
 
-# Step 1: Read File 2 into a dictionary (keyed by lowercase Name)
-file2_data = {}
-with open(file2_path, 'r') as file2:
-    reader = csv.reader(file2, delimiter=',')  # Adjust delimiter if needed
-    header2 = next(reader)  # Skip the header
-    name_index = header2.index('Name')  # Index of the Name column
-    path_index = header2.index('Path')  # Index of the Path column
-
-    for row in reader:
-        name_lower = row[name_index].strip().lower()  # Normalize Name to lowercase
-        file2_data[name_lower] = row[path_index]  # Map Name to Path
-
-# Step 2: Process File 1 to find unique records and join with File 2
-unique_records = set()  # Track unique (ID, PM) combinations
-output_rows = []  # Store the resulting rows
-
+# Step 1: Extract User and Path from File 1
+file1_data = []  # Store rows with User and Path columns
 with open(file1_path, 'r') as file1:
     reader = csv.reader(file1, delimiter=',')  # Adjust delimiter if needed
     header1 = next(reader)  # Read the header row
-    id_index = header1.index('ID')  # Index of the ID column
-    pm_index = header1.index('PM')  # Index of the PM column
 
-    # Prepare the output header
-    output_header = header1 + ['Path']  # Add the Path column to the output
-    output_rows.append(output_header)
+    # Get indices of User and Path columns
+    user_index = header1.index('User')
+    path_index = header1.index('Path')
 
     for row in reader:
+        # Keep only User and Path columns
+        file1_data.append((row[user_index].strip().lower(), row[path_index].strip()))  # Normalize User to lowercase
+
+# Step 2: Extract unique Name and ID from File 2
+file2_data = {}  # Dictionary to store unique Name -> ID mappings
+with open(file2_path, 'r') as file2:
+    reader = csv.reader(file2, delimiter=',')  # Adjust delimiter if needed
+    header2 = next(reader)  # Read the header row
+
+    # Get indices of Name and ID columns
+    name_index = header2.index('Name')
+    id_index = header2.index('ID')
+
+    for row in reader:
+        # Normalize Name to lowercase and keep unique Name -> ID mapping
+        name_lower = row[name_index].strip().lower()
         id_value = row[id_index].strip()
-        pm_lower = row[pm_index].strip().lower()  # Normalize PM to lowercase
-        unique_key = (id_value, pm_lower)  # Combine ID and PM for uniqueness
+        if name_lower not in file2_data:
+            file2_data[name_lower] = id_value
 
-        # Check uniqueness and join condition
-        if unique_key not in unique_records and pm_lower in file2_data:
-            unique_records.add(unique_key)  # Mark this (ID, PM) as seen
-            joined_row = row + [file2_data[pm_lower]]  # Add Path from File 2
-            output_rows.append(joined_row)
+# Step 3: Perform an inner join on User (File 1) and Name (File 2)
+output_rows = []  # Store the resulting rows
+output_rows.append(['User', 'Path', 'ID'])  # Header for the output file
 
-# Step 3: Write the unique joined records to the output file
+for user, path in file1_data:
+    if user in file2_data:  # Check if User exists in File 2 data
+        output_rows.append([user, path, file2_data[user]])
+
+# Step 4: Write the output file
 with open(output_path, 'w', newline='') as output_file:
     writer = csv.writer(output_file, delimiter=',')  # Adjust delimiter if needed
     writer.writerows(output_rows)
 
-print(f"Unique joined records written to {output_path}")
+print(f"Joined records written to {output_path}")
