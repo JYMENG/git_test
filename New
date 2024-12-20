@@ -1,36 +1,54 @@
-import pandas as pd
+import csv
 from datetime import datetime
 
+# Input and output file paths
+input_file = "input.csv"  # Replace with your input file
+filtered_file = "filtered_rows.csv"  # File for rows matching the condition
+output_file = "all_rows_with_ids.csv"  # File for all rows containing matching IDs
+
 # Parameters
-input_file = "input.csv"  # Replace with your file name
-output_file = "output.csv"  # Replace with desired output file name
-non_blank_column = "ColumnA"  # Replace with the name of the non-blank column
+non_blank_column = "ColumnA"  # Replace with your column name
 date_column1 = "DateColumn1"  # Replace with the first date column name
 date_column2 = "DateColumn2"  # Replace with the second date column name
-id_column = "ID"  # Replace with the unique ID column name
+id_column = "ID"  # Replace with the ID column name
 specific_date = "2023-01-01"  # Replace with your specific date
 
-# Load the file
-df = pd.read_csv(input_file)
+# Convert specific_date to a datetime object
+specific_date = datetime.strptime(specific_date, "%Y-%m-%d")
 
-# Ensure the date columns are in datetime format, ignoring errors
-df[date_column1] = pd.to_datetime(df[date_column1], errors="coerce")
-df[date_column2] = pd.to_datetime(df[date_column2], errors="coerce")
+# Step 1: Filter rows and collect unique IDs
+unique_ids = set()
 
-# Filter rows
-filtered_df = df[
-    (df[non_blank_column].notna()) &  # Non-blank column
-    (df[date_column1] > specific_date) &  # Date condition for DateColumn1
-    (df[date_column2] > specific_date)  # Date condition for DateColumn2
-]
+with open(input_file, "r") as infile, open(filtered_file, "w", newline="") as filtered_out:
+    reader = csv.DictReader(infile)
+    writer = csv.DictWriter(filtered_out, fieldnames=reader.fieldnames)
+    writer.writeheader()
+    
+    for row in reader:
+        # Check if non-blank column is not empty
+        if row[non_blank_column].strip():
+            try:
+                # Parse date columns
+                date1 = datetime.strptime(row[date_column1], "%d-%b-%y %H:%M:%S")
+                date2 = datetime.strptime(row[date_column2], "%d-%b-%y %H:%M:%S")
+                
+                # Check if both dates are greater than the specific date
+                if date1 > specific_date and date2 > specific_date:
+                    # Add ID to unique IDs and write row to filtered file
+                    unique_ids.add(row[id_column])
+                    writer.writerow(row)
+            except (ValueError, KeyError):  # Handle invalid dates or missing columns
+                continue
 
-# Get unique IDs from filtered rows
-unique_ids = filtered_df[id_column].unique()
+# Step 2: Extract all rows containing the unique IDs
+with open(input_file, "r") as infile, open(output_file, "w", newline="") as outfile:
+    reader = csv.DictReader(infile)
+    writer = csv.DictWriter(outfile, fieldnames=reader.fieldnames)
+    writer.writeheader()
+    
+    for row in reader:
+        if row[id_column] in unique_ids:
+            writer.writerow(row)
 
-# Retrieve all rows that contain these unique IDs
-result_df = df[df[id_column].isin(unique_ids)]
-
-# Save the result to a file
-result_df.to_csv(output_file, index=False)
-
-print(f"Filtered data saved to {output_file}")
+print(f"Filtered rows saved to {filtered_file}")
+print(f"All rows with matching IDs saved to {output_file}")
