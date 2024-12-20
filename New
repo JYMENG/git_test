@@ -1,38 +1,36 @@
 import pandas as pd
-import os
-import re
+from datetime import datetime
 
-# File paths
-file1_path = 'file1.csv'  # First file
-file2_path = 'file2.csv'  # Second file
-output_dir = 'output_files'  # Directory to save the output files
+# Parameters
+input_file = "input.csv"  # Replace with your file name
+output_file = "output.csv"  # Replace with desired output file name
+non_blank_column = "ColumnA"  # Replace with the name of the non-blank column
+date_column1 = "DateColumn1"  # Replace with the first date column name
+date_column2 = "DateColumn2"  # Replace with the second date column name
+id_column = "ID"  # Replace with the unique ID column name
+specific_date = "2023-01-01"  # Replace with your specific date
 
-# Ensure the output directory exists
-os.makedirs(output_dir, exist_ok=True)
+# Load the file
+df = pd.read_csv(input_file)
 
-# Chunk size to handle large files
-chunksize = 50000  # Adjust this based on available memory
+# Ensure the date columns are in datetime format, ignoring errors
+df[date_column1] = pd.to_datetime(df[date_column1], errors="coerce")
+df[date_column2] = pd.to_datetime(df[date_column2], errors="coerce")
 
-# Read the first file in chunks
-for chunk1 in pd.read_csv(file1_path, chunksize=chunksize, encoding='ISO-8859-1'):
-    # Read the second file in chunks
-    for chunk2 in pd.read_csv(file2_path, chunksize=chunksize, encoding='ISO-8859-1'):
-        # Perform inner join on the two chunks (adjust 'ID' to the appropriate join column)
-        merged_chunk = pd.merge(chunk1, chunk2, on='ID', how='inner')
-        
-        # Process the split_column: extract the 4th item from 'split_column' split by '!'
-        merged_chunk['split_item'] = merged_chunk['split_column'].str.split('!').str[3]
-        
-        # Handle cases where the 4th item is missing: fallback to the 3rd item
-        merged_chunk['split_item'] = merged_chunk['split_item'].fillna(merged_chunk['split_column'].str.split('!').str[2])
+# Filter rows
+filtered_df = df[
+    (df[non_blank_column].notna()) &  # Non-blank column
+    (df[date_column1] > specific_date) &  # Date condition for DateColumn1
+    (df[date_column2] > specific_date)  # Date condition for DateColumn2
+]
 
-        # Retain only alphabetic characters in the extracted value
-        merged_chunk['split_item_cleaned'] = merged_chunk['split_item'].apply(
-            lambda x: ''.join(re.findall('[a-zA-Z]+', str(x))) if pd.notnull(x) else 'unknown'
-        )
+# Get unique IDs from filtered rows
+unique_ids = filtered_df[id_column].unique()
 
-        # Group rows by the cleaned split item and save to separate files
-        for name, group in merged_chunk.groupby('split_item_cleaned'):
-            output_file = os.path.join(output_dir, f"{name}.csv")
-            # Append rows to the file if it already exists
-            group.to_csv(output_file, mode='a', index=False, header=not os.path.exists(output_file))
+# Retrieve all rows that contain these unique IDs
+result_df = df[df[id_column].isin(unique_ids)]
+
+# Save the result to a file
+result_df.to_csv(output_file, index=False)
+
+print(f"Filtered data saved to {output_file}")
