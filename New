@@ -1,4 +1,4 @@
-Sub UnmergeAndCombineFiles()
+Sub UnmergeCombineAddFileName()
     Dim FolderPath As String
     Dim FileName As String
     Dim SourceWorkbook As Workbook
@@ -8,6 +8,7 @@ Sub UnmergeAndCombineFiles()
     Dim LastRow As Long, LastCol As Long
     Dim DataRange As Range
     Dim TargetLastRow As Long
+    Dim FileColumn As Long
 
     ' Specify the folder path
     FolderPath = "C:\YourFolderPath\" ' Update with your folder path
@@ -25,7 +26,7 @@ Sub UnmergeAndCombineFiles()
         ' Open the source workbook
         Set SourceWorkbook = Workbooks.Open(FolderPath & FileName)
         Set SourceSheet = SourceWorkbook.Sheets(1) ' Assuming data is in the first sheet
-        
+
         ' Unmerge all cells
         SourceSheet.Cells.UnMerge
 
@@ -37,6 +38,13 @@ Sub UnmergeAndCombineFiles()
 
         ' Copy data starting from row 5
         Set DataRange = SourceSheet.Range(SourceSheet.Cells(5, 1), SourceSheet.Cells(LastRow, LastCol))
+
+        ' Add the file name to the last column
+        FileColumn = LastCol + 1
+        SourceSheet.Range(SourceSheet.Cells(5, FileColumn), SourceSheet.Cells(LastRow, FileColumn)).Value = FileName
+
+        ' Update DataRange to include the file name column
+        Set DataRange = SourceSheet.Range(SourceSheet.Cells(5, 1), SourceSheet.Cells(LastRow, FileColumn))
         DataRange.Copy
 
         ' Paste data into the target sheet
