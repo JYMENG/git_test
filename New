@@ -5,48 +5,48 @@ from datetime import datetime
 input_file = "your_large_file.csv"
 output_file = "processed_file.csv"
 
-# Define columns for sorting and deduplication
-sort_columns = ['ID', 'Sub ID', 'datetime_column']  # Replace with your sort columns
-dedup_columns = ['ID', 'Sub ID']  # Replace with your deduplication key columns
-datetime_column = 'datetime_column'  # Replace with your datetime column name
+# Define columns for deduplication and sorting
+dedup_columns = ['column1', 'column2']  # Columns used for deduplication
+sort_columns = ['ID', 'Sub ID', 'datetime_column']  # Columns used for sorting
+datetime_column = 'datetime_column'  # The datetime column for sorting
 
-# A dictionary to store the best row for each deduplication key
-seen = {}
+# A set to track unique keys for deduplication
+unique_keys = set()
 
-# Process the file row by row
-with open(input_file, mode='r', newline='', encoding='utf-8') as infile, \
-     open(output_file, mode='w', newline='', encoding='utf-8') as outfile:
-    
+# A list to store deduplicated rows
+deduped_rows = []
+
+# Function to safely parse datetime for sorting
+def safe_parse_datetime(date_str):
+    try:
+        return datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S')  # Adjust format if needed
+    except (ValueError, TypeError):
+        return datetime.max  # Treat invalid datetimes as the latest possible date
+
+# Read and deduplicate the file row by row
+with open(input_file, mode='r', newline='', encoding='utf-8') as infile:
     reader = csv.DictReader(infile)
-    fieldnames = reader.fieldnames
-    writer = csv.DictWriter(outfile, fieldnames=fieldnames)
-    
-    # Write the header to the output file
-    writer.writeheader()
-    
     for row in reader:
-        # Create a unique deduplication key
+        # Create a deduplication key based on dedup_columns
         dedup_key = tuple(row[col] for col in dedup_columns)
-        
-        # Parse the datetime column
-        row_datetime = datetime.strptime(row[datetime_column], '%Y-%m-%d %H:%M:%S')  # Adjust format if needed
-        
-        # Check if the key has been seen and compare based on sort criteria
-        if dedup_key not in seen:
-            seen[dedup_key] = row
-        else:
-            # Compare based on datetime for deduplication
-            seen_datetime = datetime.strptime(seen[dedup_key][datetime_column], '%Y-%m-%d %H:%M:%S')
-            if row_datetime < seen_datetime:
-                seen[dedup_key] = row
-    
-    # Sort rows by the sort_columns
-    sorted_rows = sorted(
-        seen.values(),
-        key=lambda x: tuple(x[col] if col != datetime_column else datetime.strptime(x[col], '%Y-%m-%d %H:%M:%S') for col in sort_columns)
+        if dedup_key not in unique_keys:
+            unique_keys.add(dedup_key)
+            deduped_rows.append(row)
+
+# Sort deduplicated rows by ID, Sub ID, and datetime_column
+sorted_rows = sorted(
+    deduped_rows,
+    key=lambda x: (
+        x['ID'], 
+        x['Sub ID'], 
+        safe_parse_datetime(x[datetime_column])
     )
-    
-    # Write sorted rows to the output file
+)
+
+# Write the sorted, deduplicated rows to the output file
+with open(output_file, mode='w', newline='', encoding='utf-8') as outfile:
+    writer = csv.DictWriter(outfile, fieldnames=reader.fieldnames)
+    writer.writeheader()
     writer.writerows(sorted_rows)
 
 print(f"Processed file saved to: {output_file}")
