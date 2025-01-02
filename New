@@ -5,11 +5,12 @@ from datetime import datetime
 input_file = "your_large_file.csv"
 output_file = "processed_file.csv"
 
-# Define key columns and datetime column
-key_columns = ['ID', 'Sub ID']  # Replace with your key column names
+# Define columns for sorting and deduplication
+sort_columns = ['ID', 'Sub ID', 'datetime_column']  # Replace with your sort columns
+dedup_columns = ['ID', 'Sub ID']  # Replace with your deduplication key columns
 datetime_column = 'datetime_column'  # Replace with your datetime column name
 
-# A dictionary to store the smallest datetime for each key
+# A dictionary to store the best row for each deduplication key
 seen = {}
 
 # Process the file row by row
@@ -24,18 +25,28 @@ with open(input_file, mode='r', newline='', encoding='utf-8') as infile, \
     writer.writeheader()
     
     for row in reader:
-        # Create a unique key based on the specified columns
-        key = tuple(row[col] for col in key_columns)
+        # Create a unique deduplication key
+        dedup_key = tuple(row[col] for col in dedup_columns)
         
         # Parse the datetime column
         row_datetime = datetime.strptime(row[datetime_column], '%Y-%m-%d %H:%M:%S')  # Adjust format if needed
         
-        # Check if the key has been seen and compare the datetime
-        if key not in seen or row_datetime < seen[key][datetime_column]:
-            seen[key] = row
+        # Check if the key has been seen and compare based on sort criteria
+        if dedup_key not in seen:
+            seen[dedup_key] = row
+        else:
+            # Compare based on datetime for deduplication
+            seen_datetime = datetime.strptime(seen[dedup_key][datetime_column], '%Y-%m-%d %H:%M:%S')
+            if row_datetime < seen_datetime:
+                seen[dedup_key] = row
     
-    # Write the unique rows sorted by datetime to the output file
-    for row in sorted(seen.values(), key=lambda x: datetime.strptime(x[datetime_column], '%Y-%m-%d %H:%M:%S')):
-        writer.writerow(row)
+    # Sort rows by the sort_columns
+    sorted_rows = sorted(
+        seen.values(),
+        key=lambda x: tuple(x[col] if col != datetime_column else datetime.strptime(x[col], '%Y-%m-%d %H:%M:%S') for col in sort_columns)
+    )
+    
+    # Write sorted rows to the output file
+    writer.writerows(sorted_rows)
 
 print(f"Processed file saved to: {output_file}")
