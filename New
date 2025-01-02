@@ -1,64 +1,22 @@
-Sub UnmergeCombineAddFileName()
-    Dim FolderPath As String
-    Dim FileName As String
-    Dim SourceWorkbook As Workbook
-    Dim TargetWorkbook As Workbook
-    Dim TargetSheet As Worksheet
-    Dim SourceSheet As Worksheet
-    Dim LastRow As Long, LastCol As Long
-    Dim DataRange As Range
-    Dim TargetLastRow As Long
-    Dim FileColumn As Long
+import pandas as pd
 
-    ' Specify the folder path
-    FolderPath = "C:\YourFolderPath\" ' Update with your folder path
+# Input file path
+input_file = "your_file.csv"
+output_file = "output_file.csv"
 
-    ' Set up the target workbook
-    Set TargetWorkbook = ThisWorkbook
-    Set TargetSheet = TargetWorkbook.Sheets(1)
-    TargetLastRow = 1
+# Load the file into a pandas DataFrame
+df = pd.read_csv(input_file)
 
-    ' Get the first file in the folder starting with "IB"
-    FileName = Dir(FolderPath & "IB*.xls*")
-    
-    ' Loop through all matching files
-    Do While FileName <> ""
-        ' Open the source workbook
-        Set SourceWorkbook = Workbooks.Open(FolderPath & FileName)
-        Set SourceSheet = SourceWorkbook.Sheets(1) ' Assuming data is in the first sheet
+# Sort by key (ID and Sub ID) and datetime column
+df.sort_values(by=['ID', 'Sub ID', 'datetime_column'], inplace=True)
 
-        ' Unmerge all cells
-        SourceSheet.Cells.UnMerge
+# Define the columns to check for duplicates
+columns_to_check = ['ID', 'Sub ID', 'datetime_column']
 
-        ' Find the last row and column with data
-        With SourceSheet
-            LastRow = .Cells(.Rows.Count, 1).End(xlUp).Row
-            LastCol = .Cells(5, .Columns.Count).End(xlToLeft).Column
-        End With
+# Drop duplicate rows based on the defined columns, keeping the first occurrence
+df = df.drop_duplicates(subset=columns_to_check, keep='first')
 
-        ' Copy data starting from row 5
-        Set DataRange = SourceSheet.Range(SourceSheet.Cells(5, 1), SourceSheet.Cells(LastRow, LastCol))
+# Save the result to a new file
+df.to_csv(output_file, index=False)
 
-        ' Add the file name to the last column
-        FileColumn = LastCol + 1
-        SourceSheet.Range(SourceSheet.Cells(5, FileColumn), SourceSheet.Cells(LastRow, FileColumn)).Value = FileName
-
-        ' Update DataRange to include the file name column
-        Set DataRange = SourceSheet.Range(SourceSheet.Cells(5, 1), SourceSheet.Cells(LastRow, FileColumn))
-        DataRange.Copy
-
-        ' Paste data into the target sheet
-        TargetSheet.Cells(TargetLastRow, 1).PasteSpecial Paste:=xlPasteValuesAndNumberFormats
-        TargetLastRow = TargetSheet.Cells(TargetSheet.Rows.Count, 1).End(xlUp).Row + 1
-
-        ' Close the source workbook
-        SourceWorkbook.Close SaveChanges:=False
-        
-        ' Move to the next file
-        FileName = Dir
-    Loop
-
-    ' Clean up
-    Application.CutCopyMode = False
-    MsgBox "Data combined successfully into " & TargetWorkbook.Name
-End Sub
+print(f"Processed file saved to: {output_file}")
