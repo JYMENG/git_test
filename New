@@ -1,22 +1,41 @@
-import pandas as pd
+import csv
+from datetime import datetime
 
-# Input file path
-input_file = "your_file.csv"
-output_file = "output_file.csv"
+# Input and output file paths
+input_file = "your_large_file.csv"
+output_file = "processed_file.csv"
 
-# Load the file into a pandas DataFrame
-df = pd.read_csv(input_file)
+# Define key columns and datetime column
+key_columns = ['ID', 'Sub ID']  # Replace with your key column names
+datetime_column = 'datetime_column'  # Replace with your datetime column name
 
-# Sort by key (ID and Sub ID) and datetime column
-df.sort_values(by=['ID', 'Sub ID', 'datetime_column'], inplace=True)
+# A dictionary to store the smallest datetime for each key
+seen = {}
 
-# Define the columns to check for duplicates
-columns_to_check = ['ID', 'Sub ID', 'datetime_column']
-
-# Drop duplicate rows based on the defined columns, keeping the first occurrence
-df = df.drop_duplicates(subset=columns_to_check, keep='first')
-
-# Save the result to a new file
-df.to_csv(output_file, index=False)
+# Process the file row by row
+with open(input_file, mode='r', newline='', encoding='utf-8') as infile, \
+     open(output_file, mode='w', newline='', encoding='utf-8') as outfile:
+    
+    reader = csv.DictReader(infile)
+    fieldnames = reader.fieldnames
+    writer = csv.DictWriter(outfile, fieldnames=fieldnames)
+    
+    # Write the header to the output file
+    writer.writeheader()
+    
+    for row in reader:
+        # Create a unique key based on the specified columns
+        key = tuple(row[col] for col in key_columns)
+        
+        # Parse the datetime column
+        row_datetime = datetime.strptime(row[datetime_column], '%Y-%m-%d %H:%M:%S')  # Adjust format if needed
+        
+        # Check if the key has been seen and compare the datetime
+        if key not in seen or row_datetime < seen[key][datetime_column]:
+            seen[key] = row
+    
+    # Write the unique rows sorted by datetime to the output file
+    for row in sorted(seen.values(), key=lambda x: datetime.strptime(x[datetime_column], '%Y-%m-%d %H:%M:%S')):
+        writer.writerow(row)
 
 print(f"Processed file saved to: {output_file}")
