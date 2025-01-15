@@ -4,61 +4,44 @@ from datetime import datetime
 
 def process_files_in_folder(folder_path, output_file, key_column_index, 
                            date_column1_index, date_column2_index, 
-                           start_date_str, end_date_str):
-    """
-    Processes all CSV files in a given folder with '|' delimiter. 
-    Finds rows where any row with the same key value has a date 
-    within the specified range in either of the date columns.
+                           start_date_str, end_date_str, 
+                           date_format='%Y-%m-%d'):  
+    start_date = datetime.strptime(start_date_str, date_format)
+    end_date = datetime.strptime(end_date_str, date_format)
 
-    Args:
-        folder_path: Path to the folder containing the CSV files.
-        output_file: Path to the output CSV file.
-        key_column_index: Index of the key column in the file.
-        date_column1_index: Index of the first date column in the file.
-        date_column2_index: Index of the second date column in the file.
-        start_date_str: Start date in the format 'YYYY-MM-DD'.
-        end_date_str: End date in the format 'YYYY-MM-DD'.
-    """
-
-    start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
-    end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
-
-    key_to_rows = {} 
+    key_to_rows = {}
 
     for file_name in os.listdir(folder_path):
         if file_name.endswith('.csv'):
             file_path = os.path.join(folder_path, file_name)
-            with open(file_path, 'r') as input_csv:
+            with open(file_path, 'r', encoding='utf-8') as input_csv:
                 reader = csv.reader(input_csv, delimiter='|')
                 header = next(reader)  # Read the header row
 
                 for row in reader:
                     key = row[key_column_index]
-                    date1_str = row[date_column1_index]
-                    date2_str = row[date_column2_index]
-
                     try:
-                        date1 = datetime.strptime(date1_str, '%Y-%m-%d')  # Adjust format if needed
-                        date2 = datetime.strptime(date2_str, '%Y-%m-%d') 
+                        date1 = datetime.strptime(row[date_column1_index], date_format)
+                        date2 = datetime.strptime(row[date_column2_index], date_format)
                     except ValueError:
                         continue  # Skip rows with invalid date format
 
                     if key not in key_to_rows:
                         key_to_rows[key] = []
-
                     key_to_rows[key].append(row)
 
-    with open(output_file, 'w', newline='') as output_csv:
+    with open(output_file, 'w', newline='', encoding='utf-8') as output_csv:
         writer = csv.writer(output_csv)
         writer.writerow(header)
 
         for key, rows in key_to_rows.items():
-            for row in rows:
-                for other_row in rows:
-                    if (start_date <= other_row[date_column1_index] <= end_date or 
-                        start_date <= other_row[date_column2_index] <= end_date):
-                        writer.writerow(row)
-                        break  # Move to the next row for this key
+            date_within_range = any(
+                start_date <= datetime.strptime(row[date_column1_index], date_format) <= end_date or
+                start_date <= datetime.strptime(row[date_column2_index], date_format) <= end_date
+                for row in rows
+            )
+            if date_within_range:
+                writer.writerows(rows)
 
 # Example usage
 folder_path = "/path/to/your/folder"
@@ -68,7 +51,8 @@ date_column1_index = 1
 date_column2_index = 2
 start_date_str = "2024-01-01"
 end_date_str = "2024-12-31"
+date_format = '%Y-%m-%d'
 
 process_files_in_folder(folder_path, output_file, key_column_index, 
                        date_column1_index, date_column2_index, 
-                       start_date_str, end_date_str)
+                       start_date_str, end_date_str, date_format)
