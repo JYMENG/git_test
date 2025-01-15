@@ -1,56 +1,82 @@
-import os
-import pandas as pd
+import csv
+from datetime import datetime, timedelta
 
-def process_files_in_folder(folder_path):
+def process_huge_file(file_path, date_column1_index, date_column2_index, id_index, time_period_days=30):
     """
-    Processes all files in a given folder.
-
-    1. Reads each CSV file.
-    2. Extracts unique IDs based on two date columns within a specified time period.
-    3. Retrieves all unique records associated with the extracted IDs.
+    Processes a large file without using pandas.
 
     Args:
-        folder_path: Path to the folder containing the CSV files.
+        file_path: Path to the file.
+        date_column1_index: Index of the first date column in the file.
+        date_column2_index: Index of the second date column in the file.
+        id_index: Index of the ID column in the file.
+        time_period_days: Number of days for the time period.
 
-    Returns:
-        A list of DataFrames, one for each processed file.
+    Yields:
+        A list of rows that match the criteria.
     """
 
-    file_list = [f for f in os.listdir(folder_path) if f.endswith('.csv')]
-    all_dataframes = []
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=time_period_days)
 
-    for file_name in file_list:
-        file_path = os.path.join(folder_path, file_name)
-        try:
-            df = pd.read_csv(file_path)
+    with open(file_path, 'r') as file:
+        reader = csv.reader(file)
+        header = next(reader)  # Read the header row
 
-            # Define the time period (example: last 30 days)
-            end_date = pd.to_datetime('today')
-            start_date = end_date - pd.DateOffset(days=30)
+        for row in reader:
+            try:
+                date1_str = row[date_column1_index]
+                date2_str = row[date_column2_index]
+                date1 = datetime.strptime(date1_str, '%Y-%m-%d')  # Adjust format as needed
+                date2 = datetime.strptime(date2_str, '%Y-%m-%d')  # Adjust format as needed
 
-            # Convert date columns to datetime objects
-            df['date_column1'] = pd.to_datetime(df['date_column1'])
-            df['date_column2'] = pd.to_datetime(df['date_column2'])
+                if (start_date <= date1 <= end_date) or (start_date <= date2 <= end_date):
+                    yield row
 
-            # Filter data within the time period
-            df_filtered = df[(df['date_column1'] >= start_date) & (df['date_column1'] <= end_date) | 
-                           (df['date_column2'] >= start_date) & (df['date_column2'] <= end_date)]
+            except (ValueError, IndexError):
+                # Handle potential errors (e.g., invalid date format, missing columns)
+                print(f"Error processing row: {row}")
 
-            # Get unique IDs
-            unique_ids = df_filtered['id'].unique()
+def get_unique_ids(file_path, id_index):
+    """
+    Gets unique IDs from the file without using pandas.
 
-            # Get all records with unique IDs
-            df_unique = df[df['id'].isin(unique_ids)]
+    Args:
+        file_path: Path to the file.
+        id_index: Index of the ID column in the file.
 
-            all_dataframes.append(df_unique)
+    Returns:
+        A set of unique IDs.
+    """
 
-        except Exception as e:
-            print(f"Error processing {file_name}: {e}")
+    unique_ids = set()
+    with open(file_path, 'r') as file:
+        reader = csv.reader(file)
+        next(reader)  # Skip header
 
-    return all_dataframes
+        for row in reader:
+            try:
+                unique_ids.add(row[id_index])
+            except IndexError:
+                pass  # Handle missing ID column
+
+    return unique_ids
 
 # Example usage
-folder_path = "/path/to/your/folder"  # Replace with the actual folder path
-processed_dataframes = process_files_in_folder(folder_path)
+file_path = "/path/to/your/file.csv"
+date_column1_index = 0
+date_column2_index = 1
+id_index = 2
 
-# Further processing or analysis can be performed on the processed_dataframes 
+# Get unique IDs
+unique_ids = get_unique_ids(file_path, id_index)
+
+# Process the file and filter based on unique IDs
+with open(file_path, 'r') as file:
+    reader = csv.reader(file)
+    header = next(reader)  # Read the header row
+
+    for row in reader:
+        if row[id_index] in unique_ids:
+            # Process the row (e.g., write to a new file, perform calculations)
+            print(row) 
