@@ -60,4 +60,26 @@ def process_files_in_folder(folder_path, output_file, key_column_index,
         writer.writerow(header)
 
         for key, rows in key_to_rows.items():
-            # Check if
+            # Check if any row for this key has a valid date within range
+            date_within_range = any(
+                (date1 and start_date <= date1 <= end_date) or 
+                (date2 and start_date <= date2 <= end_date)
+                for _, date1, date2 in rows
+            )
+            if date_within_range:
+                # Write all rows for this key if condition is met
+                writer.writerows(row for row, _, _ in rows)
+
+# Example usage
+folder_path = "/path/to/your/folder"
+output_file = "output.csv"
+key_column_index = 0 
+date_column1_index = 1
+date_column2_index = 2
+start_date_str = "2024-01-01"
+end_date_str = "2024-12-31"
+date_format = '%Y-%m-%d'
+
+process_files_in_folder(folder_path, output_file, key_column_index, 
+                       date_column1_index, date_column2_index, 
+                       start_date_str, end_date_str, date_format)
