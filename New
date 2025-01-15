@@ -1,7 +1,7 @@
 import csv
-from datetime import datetime, timedelta
+from datetime import datetime
 
-def process_huge_file(file_path, date_column1_index, date_column2_index, id_index, time_period_days=30):
+def process_huge_file(file_path, date_column1_index, date_column2_index, id_index, start_date_str, end_date_str):
     """
     Processes a large file without using pandas.
 
@@ -10,14 +10,15 @@ def process_huge_file(file_path, date_column1_index, date_column2_index, id_inde
         date_column1_index: Index of the first date column in the file.
         date_column2_index: Index of the second date column in the file.
         id_index: Index of the ID column in the file.
-        time_period_days: Number of days for the time period.
+        start_date_str: Start date in the format 'YYYY-MM-DD'.
+        end_date_str: End date in the format 'YYYY-MM-DD'.
 
     Yields:
         A list of rows that match the criteria.
     """
 
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=time_period_days)
+    start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+    end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
 
     with open(file_path, 'r') as file:
         reader = csv.reader(file)
@@ -67,6 +68,8 @@ file_path = "/path/to/your/file.csv"
 date_column1_index = 0
 date_column2_index = 1
 id_index = 2
+start_date_str = "2024-01-01"
+end_date_str = "2024-12-31"
 
 # Get unique IDs
 unique_ids = get_unique_ids(file_path, id_index)
