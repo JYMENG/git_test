@@ -61,14 +61,16 @@ def process_files_in_folder(folder_path, output_file, key_column_index,
 
         for key, rows in key_to_rows.items():
             # Check if any row for this key has a valid date within range
-            date_within_range = any(
-                (date1 and start_date <= date1 <= end_date) or 
-                (date2 and start_date <= date2 <= end_date)
-                for _, date1, date2 in rows
-            )
-            if date_within_range:
-                # Write all rows for this key if condition is met
-                writer.writerows(row for row, _, _ in rows)
+            # Filter rows by date range for both date columns
+            rows_within_range = [
+                row for row, date1, date2 in rows
+                if (date1 and start_date <= date1 <= end_date) or
+                   (date2 and start_date <= date2 <= end_date)
+            ]
+
+            if rows_within_range:
+                # Write all rows for this key if any date is within the range
+                writer.writerows(rows_within_range)
 
 # Example usage
 folder_path = "/path/to/your/folder"
