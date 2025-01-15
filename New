@@ -6,11 +6,27 @@ def process_files_in_folder(folder_path, output_file, key_column_index,
                            date_column1_index, date_column2_index, 
                            start_date_str, end_date_str, 
                            date_format='%Y-%m-%d'):  
+    """
+    Processes all CSV files in a folder with '|' delimiter. 
+    Outputs rows where any row with the same key has a date within the range.
+    
+    Args:
+        folder_path: Path to the folder containing the CSV files.
+        output_file: Path to the output CSV file.
+        key_column_index: Index of the key column in the file.
+        date_column1_index: Index of the first date column in the file.
+        date_column2_index: Index of the second date column in the file.
+        start_date_str: Start date in the specified format.
+        end_date_str: End date in the specified format.
+        date_format: Format string for parsing dates (default: '%Y-%m-%d').
+    """
+
     start_date = datetime.strptime(start_date_str, date_format)
     end_date = datetime.strptime(end_date_str, date_format)
 
-    key_to_rows = {}
+    key_to_rows = {}  # Dictionary to store rows grouped by key
 
+    # Read all files in the folder
     for file_name in os.listdir(folder_path):
         if file_name.endswith('.csv'):
             file_path = os.path.join(folder_path, file_name)
@@ -20,39 +36,28 @@ def process_files_in_folder(folder_path, output_file, key_column_index,
 
                 for row in reader:
                     key = row[key_column_index]
+
+                    # Attempt to parse dates, handle errors gracefully
                     try:
                         date1 = datetime.strptime(row[date_column1_index], date_format)
+                    except ValueError:
+                        date1 = None  # Assign None for invalid date
+
+                    try:
                         date2 = datetime.strptime(row[date_column2_index], date_format)
                     except ValueError:
-                        continue  # Skip rows with invalid date format
+                        date2 = None  # Assign None for invalid date
 
+                    # Group rows by key
                     if key not in key_to_rows:
                         key_to_rows[key] = []
-                    key_to_rows[key].append(row)
 
+                    key_to_rows[key].append((row, date1, date2))  # Store row with parsed dates
+
+    # Write output file
     with open(output_file, 'w', newline='', encoding='utf-8') as output_csv:
         writer = csv.writer(output_csv)
         writer.writerow(header)
 
         for key, rows in key_to_rows.items():
-            date_within_range = any(
-                start_date <= datetime.strptime(row[date_column1_index], date_format) <= end_date or
-                start_date <= datetime.strptime(row[date_column2_index], date_format) <= end_date
-                for row in rows
-            )
-            if date_within_range:
-                writer.writerows(rows)
-
-# Example usage
-folder_path = "/path/to/your/folder"
-output_file = "output.csv"
-key_column_index = 0 
-date_column1_index = 1
-date_column2_index = 2
-start_date_str = "2024-01-01"
-end_date_str = "2024-12-31"
-date_format = '%Y-%m-%d'
-
-process_files_in_folder(folder_path, output_file, key_column_index, 
-                       date_column1_index, date_column2_index, 
-                       start_date_str, end_date_str, date_format)
+            # Check if
