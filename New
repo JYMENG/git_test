@@ -1,87 +1,12 @@
-import os
-import csv
-from datetime import datetime
-
-def process_files_in_folder(folder_path, output_file, key_column_index, 
-                           date_column1_index, date_column2_index, 
-                           start_date_str, end_date_str, 
-                           date_format='%Y-%m-%d'):  
-    """
-    Processes all CSV files in a folder with '|' delimiter. 
-    Outputs rows where any row with the same key has a date within the range.
+%macro clean_string(input_str);
+    %let cleaned_str = %sysfunc(tranwrd(&input_str, %str('), %str()));  /* Remove single quotes */
+    %let cleaned_str = %sysfunc(tranwrd(&cleaned_str, %str(-), %str()));  /* Remove hyphens */
     
-    Args:
-        folder_path: Path to the folder containing the CSV files.
-        output_file: Path to the output CSV file.
-        key_column_index: Index of the key column in the file.
-        date_column1_index: Index of the first date column in the file.
-        date_column2_index: Index of the second date column in the file.
-        start_date_str: Start date in the specified format.
-        end_date_str: End date in the specified format.
-        date_format: Format string for parsing dates (default: '%Y-%m-%d').
-    """
+    &cleaned_str
+%mend clean_string;
 
-    start_date = datetime.strptime(start_date_str, date_format)
-    end_date = datetime.strptime(end_date_str, date_format)
+/* Test the macro */
+%let test_string = 'Hello-World-"Test"-String';
+%let result = %clean_string(&test_string);
 
-    key_to_rows = {}  # Dictionary to store rows grouped by key
-
-    # Read all files in the folder
-    for file_name in os.listdir(folder_path):
-        if file_name.endswith('.csv'):
-            file_path = os.path.join(folder_path, file_name)
-            with open(file_path, 'r', encoding='utf-8') as input_csv:
-                reader = csv.reader(input_csv, delimiter='|')
-                header = next(reader)  # Read the header row
-
-                for row in reader:
-                    key = row[key_column_index]
-
-                    # Attempt to parse dates, handle errors gracefully
-                    try:
-                        date1 = datetime.strptime(row[date_column1_index], date_format)
-                    except ValueError:
-                        date1 = None  # Assign None for invalid date
-
-                    try:
-                        date2 = datetime.strptime(row[date_column2_index], date_format)
-                    except ValueError:
-                        date2 = None  # Assign None for invalid date
-
-                    # Group rows by key
-                    if key not in key_to_rows:
-                        key_to_rows[key] = []
-
-                    key_to_rows[key].append((row, date1, date2))  # Store row with parsed dates
-
-    # Write output file
-    with open(output_file, 'w', newline='', encoding='utf-8') as output_csv:
-        writer = csv.writer(output_csv)
-        writer.writerow(header)
-
-        for key, rows in key_to_rows.items():
-            # Check if any row for this key has a valid date within range
-            # Filter rows by date range for both date columns
-            rows_within_range = [
-                row for row, date1, date2 in rows
-                if (date1 and start_date <= date1 <= end_date) or
-                   (date2 and start_date <= date2 <= end_date)
-            ]
-
-            if rows_within_range:
-                # Write all rows for this key if any date is within the range
-                writer.writerows(rows_within_range)
-
-# Example usage
-folder_path = "/path/to/your/folder"
-output_file = "output.csv"
-key_column_index = 0 
-date_column1_index = 1
-date_column2_index = 2
-start_date_str = "2024-01-01"
-end_date_str = "2024-12-31"
-date_format = '%Y-%m-%d'
-
-process_files_in_folder(folder_path, output_file, key_column_index, 
-                       date_column1_index, date_column2_index, 
-                       start_date_str, end_date_str, date_format)
+%put &result;
