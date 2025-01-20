@@ -1,31 +1,58 @@
 import sqlite3
 import pandas as pd
 
-# Path to the CSV file
+# Path to the input CSV file
 csv_file = "your_large_file.csv"
+output_csv = "output_file.csv"
 
-# Specify the columns to calculate the max value for
+# Key column and columns to calculate max values
+key_column = "key_column"
 columns_to_check = ["column1", "column2", "column3"]
 
-# Create a connection to SQLite (in-memory database for efficiency)
+# Create an in-memory SQLite database
 conn = sqlite3.connect(":memory:")
 
-# Load the CSV file into a pandas DataFrame in chunks
-chunksize = 100000  # Adjust this based on your memory availability
+# Load the CSV file into SQLite in chunks
+chunksize = 100000  # Adjust based on memory
 for chunk in pd.read_csv(csv_file, chunksize=chunksize):
     chunk.to_sql("data", conn, if_exists="append", index=False)
 
-# Build the SQL query to find max values
-sql_query = f"SELECT {', '.join([f'MAX({col}) AS max_{col}' for col in columns_to_check])} FROM data"
+# Step 1: Compute max values grouped by the key column
+max_query = f"""
+SELECT {key_column}, 
+       {', '.join([f'MAX({col}) AS max_{col}' for col in columns_to_check])}
+FROM data
+GROUP BY {key_column}
+"""
+max_table_name = "max_table" 
+conn.execute(f"CREATE TEMP TABLE {max_table_name} AS ({max_query})") 
 
-# Execute the query
-cursor = conn.cursor()
-cursor.execute(sql_query)
-max_values = cursor.fetchone()
+# Step 2: Inner join max_table with the original data
+join_query = f"""
+SELECT d.*
+FROM data d
+INNER JOIN {max_table_name} m
+ON d.{key_column} = m.{key_column}
+AND {' AND '.join([f'd.{col} = m.max_{col}' for col in columns_to_check])}
+"""
 
-# Print the results
-for col, max_val in zip(columns_to_check, max_values):
-    print(f"Max value for {col}: {max_val}")
+# Fetch the joined results into a DataFrame
+result_df = pd.read_sql_query(join_query, conn)
 
-# Close the connection
+# Step 3: Save the result to a new CSV file
+result_df.to_csv(output_csv, index=False)
+
+# Close the SQLite connection
 conn.close()
+
+print(f"Output saved to: {output_csv}")
+
+Key Improvements:
+ * Explicit Table Name: The code now explicitly assigns a name (max_table_name) to the temporary table created in Step 1. This makes the code more readable and maintainable.
+ * Conciseness: Minor improvements like removing unnecessary parentheses have been made for better readability.
+Explanation:
+ * Load Data in Chunks: The code reads the CSV file in chunks to avoid memory issues with large datasets.
+ * Create Temporary Table: The max_query calculates the maximum values for each key_column and stores them in a temporary table named max_table.
+ * Inner Join: The join_query performs an inner join between the original data table and the max_table. This identifies rows where the values of columns_to_check match the maximum values for their respective key_column.
+ * Fetch and Save Results: The joined results are fetched into a pandas DataFrame and then saved to the output_csv file.
+This refined code provides a more robust and readable solution for finding rows with maximum values within groups in a large CSV file using SQLite and pandas.
