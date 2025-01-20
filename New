@@ -1,12 +1,31 @@
-%macro clean_string(input_str);
-    %let cleaned_str = %sysfunc(tranwrd(&input_str, %str('), %str()));  /* Remove single quotes */
-    %let cleaned_str = %sysfunc(tranwrd(&cleaned_str, %str(-), %str()));  /* Remove hyphens */
-    
-    &cleaned_str
-%mend clean_string;
+import sqlite3
+import pandas as pd
 
-/* Test the macro */
-%let test_string = 'Hello-World-"Test"-String';
-%let result = %clean_string(&test_string);
+# Path to the CSV file
+csv_file = "your_large_file.csv"
 
-%put &result;
+# Specify the columns to calculate the max value for
+columns_to_check = ["column1", "column2", "column3"]
+
+# Create a connection to SQLite (in-memory database for efficiency)
+conn = sqlite3.connect(":memory:")
+
+# Load the CSV file into a pandas DataFrame in chunks
+chunksize = 100000  # Adjust this based on your memory availability
+for chunk in pd.read_csv(csv_file, chunksize=chunksize):
+    chunk.to_sql("data", conn, if_exists="append", index=False)
+
+# Build the SQL query to find max values
+sql_query = f"SELECT {', '.join([f'MAX({col}) AS max_{col}' for col in columns_to_check])} FROM data"
+
+# Execute the query
+cursor = conn.cursor()
+cursor.execute(sql_query)
+max_values = cursor.fetchone()
+
+# Print the results
+for col, max_val in zip(columns_to_check, max_values):
+    print(f"Max value for {col}: {max_val}")
+
+# Close the connection
+conn.close()
