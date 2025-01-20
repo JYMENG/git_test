@@ -1,64 +1,56 @@
+import os
 import pandas as pd
-from datetime import datetime
+import sqlite3
 
-# Step 1: Define chunk size
-chunk_size = 10000  # Adjust depending on your available memory
-input_file = 'huge_workflow_data.csv'  # Path to your input file
-output_file = 'workflow_with_processing_times.csv'  # Path to your output file
+# Step 1: Define paths and variables
+folder_path = 'path_to_your_folder'  # Replace with your folder path
+output_file = 'final_output.csv'  # Output file for the joined result
+chunk_size = 10000  # Adjust depending on memory
 
-# Step 2: Create a function to calculate processing time for each chunk
-def process_chunk(chunk):
-    # Ensure datetime columns are parsed correctly
-    chunk['Step_Datetime'] = pd.to_datetime(chunk['Step_Datetime'], format='%Y-%m-%d %H:%M:%S')
-    chunk['Workflow_End'] = pd.to_datetime(chunk['Workflow_End'], format='%Y-%m-%d %H:%M:%S')
+# Columns to calculate max for and join on
+columns_to_max = ['ColumnA', 'ColumnB']  # Replace with your column names
+join_column = 'ColumnA'  # Replace with the column to join on
 
-    # Step 3: Sort by ID and Step to ensure proper order of the workflow steps
-    chunk = chunk.sort_values(by=['ID', 'Step'])
+# Step 2: Initialize SQLite database
+conn = sqlite3.connect(':memory:')  # Use an in-memory database for performance
+cursor = conn.cursor()
 
-    # Step 4: Initialize a list for processing times
-    processing_times = []
+# Step 3: Read and insert all files into SQLite
+for file in os.listdir(folder_path):
+    if file.endswith('.csv'):
+        file_path = os.path.join(folder_path, file)
+        print(f"Processing file: {file_path}")
+        
+        # Read the file in chunks
+        for chunk in pd.read_csv(file_path, dtype=str, chunksize=chunk_size):
+            # Insert chunk into SQLite
+            chunk.to_sql('original_data', conn, if_exists='append', index=False)
 
-    # Step 5: Group by ID and process each workflow (ID) separately
-    for workflow_id, workflow_group in chunk.groupby('ID'):
-        # Sort by Step to ensure the proper order of the steps within each workflow
-        workflow_group = workflow_group.sort_values(by='Step')
+# Step 4: Calculate max for specified columns grouped by ID
+columns_to_max_sql = ', '.join([f'MAX({col}) AS max_{col}' for col in columns_to_max])
+query_max = f"""
+    CREATE TEMP TABLE max_values AS
+    SELECT ID, {columns_to_max_sql}
+    FROM original_data
+    GROUP BY ID;
+"""
+cursor.execute(query_max)
 
-        # Step 6: Process each row for the current workflow
-        for i, row in workflow_group.iterrows():
-            # Get the next step's datetime (if available)
-            next_row = workflow_group.iloc[i+1] if i+1 < len(workflow_group) else None
+# Step 5: Inner join the max values with the original data
+query_join = f"""
+    CREATE TEMP TABLE joined_data AS
+    SELECT o.*
+    FROM original_data o
+    INNER JOIN max_values m
+    ON o.ID = m.ID AND o.{join_column} = m.max_{join_column};
+"""
+cursor.execute(query_join)
 
-            # If it is the last step, use the Workflow_End to calculate the processing time
-            if next_row is None:
-                processing_time = (row['Workflow_End'] - row['Step_Datetime']).total_seconds()
-            else:
-                # Otherwise, calculate the difference between current step and next step
-                processing_time = (next_row['Step_Datetime'] - row['Step_Datetime']).total_seconds()
+# Step 6: Export the joined data to a CSV file
+output_query = "SELECT * FROM joined_data"
+joined_df = pd.read_sql_query(output_query, conn)
+joined_df.to_csv(output_file, index=False)
 
-            # If there's only one row, calculate the processing time from current datetime to Step_Datetime
-            if len(workflow_group) == 1:
-                processing_time = (datetime.now() - row['Step_Datetime']).total_seconds()
-
-            processing_times.append(processing_time)
-
-    # Add the calculated processing times to the chunk
-    chunk['Processing_Time'] = processing_times
-
-    return chunk[['ID', 'Step', 'Step_Datetime', 'Workflow_End', 'Processing_Time']]  # Return the relevant columns
-
-# Step 7: Initialize a CSV file for output (if the file doesn't exist)
-header_written = False
-
-# Step 8: Read and process the file in chunks
-for chunk in pd.read_csv(input_file, dtype=str, chunksize=chunk_size):
-    # Process the chunk to calculate processing time
-    processed_chunk = process_chunk(chunk)
-    
-    # Write the processed chunk to the output file
-    # If it's the first chunk, write the header, otherwise just append the data
-    processed_chunk.to_csv(output_file, mode='a', header=not header_written, index=False)
-    
-    # Update the flag to indicate that the header has been written
-    header_written = True
-
-print("Processing complete. Results saved to", output_file)
+# Step 7: Clean up
+conn.close()
+print(f"Processing complete. Results saved to {output_file}")
