@@ -1,56 +1,47 @@
-import os
 import pandas as pd
-import sqlite3
+import numpy as np
+from datetime import datetime
 
-# Step 1: Define paths and variables
-folder_path = 'path_to_your_folder'  # Replace with your folder path
-output_file = 'final_output.csv'  # Output file for the joined result
-chunk_size = 10000  # Adjust depending on memory
+# Sample data
+data = {
+    "KEY1": ["A", "A", "A", "B", "B"],
+    "KEY2": ["X", "X", "X", "Y", "Y"],
+    "D1": ["2025-01-01", "2025-01-02", "2025-01-03", "2025-01-01", "2025-01-02"],
+    "D2": ["2025-01-02", "2025-01-03", None, "2025-01-02", None],
+    "D3": ["2025-01-01", "2025-01-01", "2025-01-01", "2025-01-01", "2025-01-01"],
+}
 
-# Columns to calculate max for and join on
-columns_to_max = ['ColumnA', 'ColumnB']  # Replace with your column names
-join_column = 'ColumnA'  # Replace with the column to join on
+df = pd.DataFrame(data)
 
-# Step 2: Initialize SQLite database
-conn = sqlite3.connect(':memory:')  # Use an in-memory database for performance
-cursor = conn.cursor()
+# Convert to datetime
+df["D1"] = pd.to_datetime(df["D1"])
+df["D2"] = pd.to_datetime(df["D2"])
+df["D3"] = pd.to_datetime(df["D3"])
 
-# Step 3: Read and insert all files into SQLite
-for file in os.listdir(folder_path):
-    if file.endswith('.csv'):
-        file_path = os.path.join(folder_path, file)
-        print(f"Processing file: {file_path}")
-        
-        # Read the file in chunks
-        for chunk in pd.read_csv(file_path, dtype=str, chunksize=chunk_size):
-            # Insert chunk into SQLite
-            chunk.to_sql('original_data', conn, if_exists='append', index=False)
+# Add current date
+current_date = pd.Timestamp(datetime.now())
 
-# Step 4: Calculate max for specified columns grouped by ID
-columns_to_max_sql = ', '.join([f'MAX({col}) AS max_{col}' for col in columns_to_max])
-query_max = f"""
-    CREATE TEMP TABLE max_values AS
-    SELECT ID, {columns_to_max_sql}
-    FROM original_data
-    GROUP BY ID;
-"""
-cursor.execute(query_max)
+# Column 1: All Records
+df["Col1"] = (df["D2"].fillna(current_date) - df["D3"]).dt.days
 
-# Step 5: Inner join the max values with the original data
-query_join = f"""
-    CREATE TEMP TABLE joined_data AS
-    SELECT o.*
-    FROM original_data o
-    INNER JOIN max_values m
-    ON o.ID = m.ID AND o.{join_column} = m.max_{join_column};
-"""
-cursor.execute(query_join)
+# Column 2: Between Records for KEY1 and KEY2
+def calculate_col2(group):
+    group = group.sort_values("D1").reset_index(drop=True)
+    n = len(group)
+    
+    col2 = []
+    for i in range(n):
+        if n == 1:  # Only one record
+            col2.append((group.loc[i, "D2"] or current_date - group.loc[i, "D3"]).days)
+        elif i == n - 1:  # Last record
+            col2.append((group.loc[i, "D2"] - group.loc[i, "D1"]).days)
+        else:  # Intermediate records
+            col2.append((group.loc[i + 1, "D1"] - group.loc[i, "D1"]).days)
+    
+    group["Col2"] = col2
+    return group
 
-# Step 6: Export the joined data to a CSV file
-output_query = "SELECT * FROM joined_data"
-joined_df = pd.read_sql_query(output_query, conn)
-joined_df.to_csv(output_file, index=False)
+df = df.groupby(["KEY1", "KEY2"]).apply(calculate_col2)
 
-# Step 7: Clean up
-conn.close()
-print(f"Processing complete. Results saved to {output_file}")
+# Result
+print(df)
