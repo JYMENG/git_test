@@ -1,56 +1,64 @@
+import pandas as pd
 import numpy as np
 
-def calculate_net_workdays_numpy(df):
+def calculate_net_workdays(df, key_columns, date_columns):
     """
-    Calculates net workdays based on key combination K1, K2 in a sorted DataFrame 
-    using numpy.busday_count.
-
-    Args:
-        df: Sorted DataFrame with columns 'K1', 'K2', 'D1', 'D2', 'D3'.
-
+    Calculate net business days based on conditions:
+    - If only one row in a group, calculate between D1 and D3.
+    - If the row is the last in a group, calculate between D2 and D3.
+    - Otherwise, calculate between D2 of the current row and D2 of the next row.
+    
+    Parameters:
+    - df: Input DataFrame (must be sorted by key and relevant date columns).
+    - key_columns: List of columns to group by.
+    - date_columns: List containing [D1, D2, D3] column names in the DataFrame.
+    
     Returns:
-        DataFrame with an additional column 'Net_Workdays'.
+    - A DataFrame with an additional 'Net_Workdays' column.
     """
-
+    D1, D2, D3 = date_columns
+    df = df.sort_values(by=key_columns + [D2]).reset_index(drop=True)
+    
+    # Initialize result column
     df['Net_Workdays'] = 0
-
-    for key, group in df.groupby(['K1', 'K2']):
-        if len(group) == 1:
-            # If only one record, calculate business days between D3 and D1
-            group.loc[:, 'Net_Workdays'] = np.busday_count(group['D1'].values, 
-                                                          group['D3'].values) 
+    
+    # Group by key columns
+    grouped = df.groupby(key_columns)
+    
+    for name, group in grouped:
+        if len(group) == 1:  # Single-row group
+            df.loc[group.index, 'Net_Workdays'] = np.busday_count(
+                group[D1].values[0].astype('datetime64[D]'),
+                group[D3].values[0].astype('datetime64[D]')
+            )
         else:
-            for i, row in group.iloc[:-1].iterrows(): 
-                # For all rows except the last, calculate business days between current row's D2 and next row's D2
-                next_row_d2 = group.loc[group.index[i+1], 'D2']
-                group.loc[i, 'Net_Workdays'] = np.busday_count(row['D2'].values, 
-                                                              next_row_d2.values) 
-            # For the last row, calculate business days between D2 and D3
-            last_row_idx = group.index[-1]
-            group.loc[last_row_idx, 'Net_Workdays'] = np.busday_count(group.loc[last_row_idx, 'D2'].values, 
-                                                                    group.loc[last_row_idx, 'D3'].values) 
-
+            for i, idx in enumerate(group.index):
+                if i == len(group) - 1:  # Last row in group
+                    df.loc[idx, 'Net_Workdays'] = np.busday_count(
+                        group.loc[idx, D2].astype('datetime64[D]'),
+                        group.loc[idx, D3].astype('datetime64[D]')
+                    )
+                else:  # Other rows in group
+                    next_idx = group.index[i + 1]
+                    df.loc[idx, 'Net_Workdays'] = np.busday_count(
+                        group.loc[idx, D2].astype('datetime64[D]'),
+                        group.loc[next_idx, D2].astype('datetime64[D]')
+                    )
+    
     return df
 
-# Example Usage:
-# Assuming 'D1', 'D2', and 'D3' are datetime columns in your DataFrame
-df = pd.DataFrame({
-    'K1': ['A', 'A', 'A', 'B', 'B'],
-    'K2': ['X', 'X', 'X', 'Y', 'Y'],
-    'D1': pd.to_datetime(['2024-01-01', '2024-01-01', '2024-01-01', '2024-02-01', '2024-02-01']),
-    'D2': pd.to_datetime(['2024-01-05', '2024-01-10', '2024-01-15', '2024-02-05', '2024-02-10']),
-    'D3': pd.to_datetime(['2024-01-20', '2024-01-20', '2024-01-20', '2024-02-20', '2024-02-20'])
-})
+# Example Usage
+data = {
+    'Key1': ['A', 'A', 'A', 'B', 'B'],
+    'Key2': [1, 1, 1, 2, 2],
+    'D1': ['2023-01-01', '2023-01-02', '2023-01-03', '2023-01-01', '2023-01-05'],
+    'D2': ['2023-01-02', '2023-01-03', '2023-01-04', '2023-01-03', '2023-01-06'],
+    'D3': ['2023-01-05', '2023-01-05', '2023-01-05', '2023-01-07', '2023-01-07']
+}
+df = pd.DataFrame(data)
+df['D1'] = pd.to_datetime(df['D1'])
+df['D2'] = pd.to_datetime(df['D2'])
+df['D3'] = pd.to_datetime(df['D3'])
 
-df = calculate_net_workdays_numpy(df)
-print(df)
-
-Key Changes:
- * Function Name: Changed to calculate_net_workdays_numpy() for clarity.
- * Calculation Logic:
-   * Replaced (date2 - date1).days with np.busday_count(date1.values, date2.values). This utilizes the np.busday_count function from NumPy to directly count the number of business days between two dates.
-This code effectively calculates net workdays using NumPy's busday_count function, providing a more concise and potentially faster solution for specific use cases.
-Note:
- * This code assumes that 'D1', 'D2', and 'D3' are datetime columns in your DataFrame.
- * The DataFrame must be sorted by 'K1' and 'K2' before calling this function.
- * np.busday_count uses default business days (Monday to Friday) by default. You can customize the weekmask and holidays if needed using the busdaycalendar class in NumPy.
+result = calculate_net_workdays(df, ['Key1', 'Key2'], ['D1', 'D2', 'D3'])
+print(result)
