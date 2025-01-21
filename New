@@ -1,47 +1,54 @@
 import pandas as pd
 import numpy as np
-from datetime import datetime
 
-# Sample data
+# Sample DataFrame with multiple keys and datetime columns
 data = {
     "KEY1": ["A", "A", "A", "B", "B"],
-    "KEY2": ["X", "X", "X", "Y", "Y"],
-    "D1": ["2025-01-01", "2025-01-02", "2025-01-03", "2025-01-01", "2025-01-02"],
-    "D2": ["2025-01-02", "2025-01-03", None, "2025-01-02", None],
-    "D3": ["2025-01-01", "2025-01-01", "2025-01-01", "2025-01-01", "2025-01-01"],
+    "KEY2": [1, 1, 1, 2, 2],
+    "D1": ["2025-01-01", "2025-01-05", "2025-01-10", "2025-01-01", "2025-01-05"],
+    "D2": ["2025-01-03", None, "2025-01-12", "2025-01-02", "2025-01-06"],
+    "D3": ["2025-01-02", "2025-01-07", "2025-01-11", "2025-01-02", "2025-01-05"],
 }
-
 df = pd.DataFrame(data)
 
-# Convert to datetime
+# Convert date columns to datetime
 df["D1"] = pd.to_datetime(df["D1"])
-df["D2"] = pd.to_datetime(df["D2"])
+df["D2"] = pd.to_datetime(df["D2"], errors="coerce")
 df["D3"] = pd.to_datetime(df["D3"])
 
-# Add current date
-current_date = pd.Timestamp(datetime.now())
+# Sort DataFrame by KEY1, KEY2, and D1
+df = df.sort_values(by=["KEY1", "KEY2", "D1"])
 
-# Column 1: All Records
-df["Col1"] = (df["D2"].fillna(current_date) - df["D3"]).dt.days
+# Define the current date
+current_date = pd.Timestamp.now()
 
-# Column 2: Between Records for KEY1 and KEY2
-def calculate_col2(group):
-    group = group.sort_values("D1").reset_index(drop=True)
-    n = len(group)
+# Function to calculate business days between two dates
+def calculate_business_days(start, end):
+    if pd.isna(start) or pd.isna(end):
+        return np.nan
+    return np.busday_count(start.date(), end.date())
+
+# Apply logic for calculating the columns
+def calculate_columns(group):
+    result = []
+    for i, row in group.iterrows():
+        # Calculate for All Records: D2 - D3 or if D2 is NaT, use current date - D3
+        if pd.isna(row["D2"]):
+            days_diff = calculate_business_days(row["D3"], current_date)
+        else:
+            days_diff = calculate_business_days(row["D2"], row["D3"])
+        
+        result.append({
+            "D2_minus_D3": days_diff
+        })
     
-    col2 = []
-    for i in range(n):
-        if n == 1:  # Only one record
-            col2.append((group.loc[i, "D2"] or current_date - group.loc[i, "D3"]).days)
-        elif i == n - 1:  # Last record
-            col2.append((group.loc[i, "D2"] - group.loc[i, "D1"]).days)
-        else:  # Intermediate records
-            col2.append((group.loc[i + 1, "D1"] - group.loc[i, "D1"]).days)
+    # Add the calculated results back to the group
+    result_df = pd.DataFrame(result)
+    group = pd.concat([group, result_df], axis=1)
     
-    group["Col2"] = col2
     return group
 
-df = df.groupby(["KEY1", "KEY2"]).apply(calculate_col2)
+# Apply the calculation for each group (KEY1, KEY2)
+df = df.groupby(["KEY1", "KEY2"]).apply(calculate_columns)
 
-# Result
 print(df)
