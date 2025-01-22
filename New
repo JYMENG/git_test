@@ -1,64 +1,92 @@
-import pandas as pd
-import numpy as np
+import requests
+from bs4 import BeautifulSoup
 
-def calculate_net_workdays(df, key_columns, date_columns):
+def read_tickers_from_file(file_path):
     """
-    Calculate net business days based on conditions:
-    - If only one row in a group, calculate between D1 and D3.
-    - If the row is the last in a group, calculate between D2 and D3.
-    - Otherwise, calculate between D2 of the current row and D2 of the next row.
+    Read stock tickers from a file.
     
-    Parameters:
-    - df: Input DataFrame (must be sorted by key and relevant date columns).
-    - key_columns: List of columns to group by.
-    - date_columns: List containing [D1, D2, D3] column names in the DataFrame.
-    
-    Returns:
-    - A DataFrame with an additional 'Net_Workdays' column.
+    :param file_path: Path to the file containing tickers (one per line).
+    :return: List of tickers.
     """
-    D1, D2, D3 = date_columns
-    df = df.sort_values(by=key_columns + [D2]).reset_index(drop=True)
-    
-    # Initialize result column
-    df['Net_Workdays'] = 0
-    
-    # Group by key columns
-    grouped = df.groupby(key_columns)
-    
-    for name, group in grouped:
-        if len(group) == 1:  # Single-row group
-            df.loc[group.index, 'Net_Workdays'] = np.busday_count(
-                group[D1].values[0].astype('datetime64[D]'),
-                group[D3].values[0].astype('datetime64[D]')
-            )
-        else:
-            for i, idx in enumerate(group.index):
-                if i == len(group) - 1:  # Last row in group
-                    df.loc[idx, 'Net_Workdays'] = np.busday_count(
-                        group.loc[idx, D2].astype('datetime64[D]'),
-                        group.loc[idx, D3].astype('datetime64[D]')
-                    )
-                else:  # Other rows in group
-                    next_idx = group.index[i + 1]
-                    df.loc[idx, 'Net_Workdays'] = np.busday_count(
-                        group.loc[idx, D2].astype('datetime64[D]'),
-                        group.loc[next_idx, D2].astype('datetime64[D]')
-                    )
-    
-    return df
+    with open(file_path, "r") as file:
+        tickers = [line.strip() for line in file.readlines()]
+    return tickers
 
-# Example Usage
-data = {
-    'Key1': ['A', 'A', 'A', 'B', 'B'],
-    'Key2': [1, 1, 1, 2, 2],
-    'D1': ['2023-01-01', '2023-01-02', '2023-01-03', '2023-01-01', '2023-01-05'],
-    'D2': ['2023-01-02', '2023-01-03', '2023-01-04', '2023-01-03', '2023-01-06'],
-    'D3': ['2023-01-05', '2023-01-05', '2023-01-05', '2023-01-07', '2023-01-07']
-}
-df = pd.DataFrame(data)
-df['D1'] = pd.to_datetime(df['D1'])
-df['D2'] = pd.to_datetime(df['D2'])
-df['D3'] = pd.to_datetime(df['D3'])
+def search_stock_in_fund_holdings(stock_ticker, fund_cik):
+    """
+    Search for a stock in the top 10 holdings of a fund's N-PORT filing.
+    
+    :param stock_ticker: The stock ticker to search for (e.g., 'AAPL').
+    :param fund_cik: The CIK (Central Index Key) of the fund.
+    :return: True if the stock is found in the top 10 holdings, False otherwise.
+    """
+    # Base URL for EDGAR search
+    base_url = "https://www.sec.gov"
+    search_url = f"{base_url}/cgi-bin/browse-edgar"
+    
+    # Parameters for searching N-PORT filings for the fund
+    params = {
+        "action": "getcompany",
+        "CIK": fund_cik,
+        "type": "NPORT-P",
+        "dateb": "",
+        "owner": "exclude",
+        "count": "10",
+        "output": "atom"
+    }
+    
+    # Send request to EDGAR
+    response = requests.get(search_url, params=params, headers={"User-Agent": "Mozilla/5.0"})
+    if response.status_code != 200:
+        print("Failed to retrieve filings.")
+        return False
+    
+    # Parse the response to get the latest N-PORT filing link
+    soup = BeautifulSoup(response.text, "html.parser")
+    filing_link = soup.find("a", text="Documents")
+    if not filing_link:
+        print("No N-PORT filings found for the fund.")
+        return False
+    
+    # Access the filing document page
+    filing_doc_url = base_url + filing_link["href"]
+    filing_doc_response = requests.get(filing_doc_url, headers={"User-Agent": "Mozilla/5.0"})
+    filing_doc_soup = BeautifulSoup(filing_doc_response.text, "html.parser")
+    
+    # Find the XML document link (N-PORT data is in XML format)
+    xml_link = filing_doc_soup.find("a", text=lambda x: x and "xml" in x.lower())
+    if not xml_link:
+        print("No XML document found in the filing.")
+        return False
+    
+    # Access the XML document
+    xml_url = base_url + xml_link["href"]
+    xml_response = requests.get(xml_url, headers={"User-Agent": "Mozilla/5.0"})
+    xml_soup = BeautifulSoup(xml_response.content, "lxml")
+    
+    # Search for the stock ticker in the top 10 holdings
+    holdings = xml_soup.find_all("invstmentsec")
+    for holding in holdings[:10]:  # Check only the top 10 holdings
+        ticker = holding.find("ticker")
+        if ticker and ticker.text.strip() == stock_ticker:
+            print(f"Stock {stock_ticker} found in the top 10 holdings of the fund.")
+            return True
+    
+    print(f"Stock {stock_ticker} not found in the top 10 holdings of the fund.")
+    return False
 
-result = calculate_net_workdays(df, ['Key1', 'Key2'], ['D1', 'D2', 'D3'])
-print(result)
+def search_multiple_tickers_in_fund(file_path, fund_cik):
+    """
+    Search for multiple stock tickers in the top 10 holdings of a fund.
+    
+    :param file_path: Path to the file containing tickers.
+    :param fund_cik: The CIK of the fund.
+    """
+    tickers = read_tickers_from_file(file_path)
+    for ticker in tickers:
+        search_stock_in_fund_holdings(ticker, fund_cik)
+
+# Example usage
+file_path = "tickers.txt"  # Path to the file containing tickers (one per line)
+fund_cik = "0001736038"  # CIK for Vanguard Total Stock Market Index Fund
+search_multiple_tickers_in_fund(file_path, fund_cik)
