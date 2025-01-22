@@ -1,33 +1,39 @@
 import pandas as pd
 
 # Define the key columns and the specified status
-key_columns = ['ID', 'Step']
+key_columns = ['k1', 'k2']
 specified_status = 'Completed'
 
 # Read the input CSV file with '!' as the delimiter
 input_file = 'input_data.csv'  # Replace with your CSV file path
 df = pd.read_csv(input_file, sep='!')
 
-# Validate the input data: Check for key combinations with more than one row of the specified status
-validation = df[df['Status'] == specified_status].groupby(key_columns).size().reset_index(name='Count')
-invalid_records = validation[validation['Count'] != 1]
+# Group by key columns and count the total number of steps and the number of steps with the specified status
+grouped = df.groupby(key_columns).agg(
+    total_steps=('Status', 'size'),  # Total number of steps for the key combination
+    specific_status_steps=('Status', lambda x: (x == specified_status).sum())  # Number of steps with the specified status
+).reset_index()
 
-if not invalid_records.empty:
-    print("Validation failed: The following key combinations have more than one row with the specified status:")
-    print(invalid_records)
-else:
-    print("Validation passed: Each key combination has only one row with the specified status.")
+# Check for violations:
+# - A violation occurs if a key combination has multiple steps and at least one of them has the specified status.
+violations = grouped[
+    (grouped['total_steps'] > 1) & (grouped['specific_status_steps'] >= 1)
+]
 
-    # Filter records where only one step exists with the specified status
-    filtered_df = df[df['Status'] == specified_status].groupby(key_columns).filter(lambda x: len(x) == 1)
-
-    # Delete the validated records from the input DataFrame
-    updated_df = df[~df.index.isin(filtered_df.index)]
-
+if violations.empty:
+    print("No violations found. Deleting all records with the specified status.")
+    
+    # Delete all records with the specified status
+    updated_df = df[df['Status'] != specified_status]
+    
     # Save the updated DataFrame to a new CSV file
     output_file = 'updated_input_data.csv'  # Replace with your desired output file path
     updated_df.to_csv(output_file, sep='!', index=False)
-
+    
     # Display the updated DataFrame (optional)
-    print("Updated DataFrame (after deleting validated records):")
+    print("Updated DataFrame (after deleting all records with the specified status):")
     print(updated_df)
+else:
+    print("Warning: Violations found. No records will be deleted.")
+    print("Violations (key combinations with multiple steps and at least one specific status):")
+    print(violations)
