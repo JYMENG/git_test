@@ -1,92 +1,26 @@
-import requests
-from bs4 import BeautifulSoup
+import pandas as pd
 
-def read_tickers_from_file(file_path):
-    """
-    Read stock tickers from a file.
-    
-    :param file_path: Path to the file containing tickers (one per line).
-    :return: List of tickers.
-    """
-    with open(file_path, "r") as file:
-        tickers = [line.strip() for line in file.readlines()]
-    return tickers
+# Define the key columns and the specified status
+key_columns = ['ID', 'Step']
+specified_status = 'Completed'
 
-def search_stock_in_fund_holdings(stock_ticker, fund_cik):
-    """
-    Search for a stock in the top 10 holdings of a fund's N-PORT filing.
-    
-    :param stock_ticker: The stock ticker to search for (e.g., 'AAPL').
-    :param fund_cik: The CIK (Central Index Key) of the fund.
-    :return: True if the stock is found in the top 10 holdings, False otherwise.
-    """
-    # Base URL for EDGAR search
-    base_url = "https://www.sec.gov"
-    search_url = f"{base_url}/cgi-bin/browse-edgar"
-    
-    # Parameters for searching N-PORT filings for the fund
-    params = {
-        "action": "getcompany",
-        "CIK": fund_cik,
-        "type": "NPORT-P",
-        "dateb": "",
-        "owner": "exclude",
-        "count": "10",
-        "output": "atom"
-    }
-    
-    # Send request to EDGAR
-    response = requests.get(search_url, params=params, headers={"User-Agent": "Mozilla/5.0"})
-    if response.status_code != 200:
-        print("Failed to retrieve filings.")
-        return False
-    
-    # Parse the response to get the latest N-PORT filing link
-    soup = BeautifulSoup(response.text, "html.parser")
-    filing_link = soup.find("a", text="Documents")
-    if not filing_link:
-        print("No N-PORT filings found for the fund.")
-        return False
-    
-    # Access the filing document page
-    filing_doc_url = base_url + filing_link["href"]
-    filing_doc_response = requests.get(filing_doc_url, headers={"User-Agent": "Mozilla/5.0"})
-    filing_doc_soup = BeautifulSoup(filing_doc_response.text, "html.parser")
-    
-    # Find the XML document link (N-PORT data is in XML format)
-    xml_link = filing_doc_soup.find("a", text=lambda x: x and "xml" in x.lower())
-    if not xml_link:
-        print("No XML document found in the filing.")
-        return False
-    
-    # Access the XML document
-    xml_url = base_url + xml_link["href"]
-    xml_response = requests.get(xml_url, headers={"User-Agent": "Mozilla/5.0"})
-    xml_soup = BeautifulSoup(xml_response.content, "lxml")
-    
-    # Search for the stock ticker in the top 10 holdings
-    holdings = xml_soup.find_all("invstmentsec")
-    for holding in holdings[:10]:  # Check only the top 10 holdings
-        ticker = holding.find("ticker")
-        if ticker and ticker.text.strip() == stock_ticker:
-            print(f"Stock {stock_ticker} found in the top 10 holdings of the fund.")
-            return True
-    
-    print(f"Stock {stock_ticker} not found in the top 10 holdings of the fund.")
-    return False
+# Read the input CSV file with '!' as the delimiter
+input_file = 'input_data.csv'  # Replace with your CSV file path
+df = pd.read_csv(input_file, sep='!')
 
-def search_multiple_tickers_in_fund(file_path, fund_cik):
-    """
-    Search for multiple stock tickers in the top 10 holdings of a fund.
-    
-    :param file_path: Path to the file containing tickers.
-    :param fund_cik: The CIK of the fund.
-    """
-    tickers = read_tickers_from_file(file_path)
-    for ticker in tickers:
-        search_stock_in_fund_holdings(ticker, fund_cik)
+# Filter records where only one step exists with the specified status
+filtered_df = df[df['Status'] == specified_status].groupby(key_columns).filter(lambda x: len(x) == 1)
 
-# Example usage
-file_path = "tickers.txt"  # Path to the file containing tickers (one per line)
-fund_cik = "0001736038"  # CIK for Vanguard Total Stock Market Index Fund
-search_multiple_tickers_in_fund(file_path, fund_cik)
+# Save the filtered results to a new CSV file (optional)
+output_file = 'filtered_output.csv'  # Replace with your desired output file path
+filtered_df.to_csv(output_file, sep='!', index=False)
+
+# Validation: Confirm that each key combination has only one row with the specified status
+validation = filtered_df.groupby(key_columns).size().reset_index(name='Count')
+invalid_records = validation[validation['Count'] != 1]
+
+if invalid_records.empty:
+    print("Validation passed: Each key combination has only one row with the specified status.")
+else:
+    print("Validation failed: The following key combinations have more than one row:")
+    print(invalid_records)
