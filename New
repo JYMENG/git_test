@@ -1,39 +1,26 @@
 import pandas as pd
 
-# Define the key columns and the specified status
-key_columns = ['k1', 'k2']
-specified_status = 'Completed'
+# Example input data
+data = {
+    "k1": ["k1", "k1", "k1"],
+    "k2": ["k2", "k2", "k2"],
+    "value": ["a", "b", "c"]
+}
 
-# Read the input CSV file with '!' as the delimiter
-input_file = 'input_data.csv'  # Replace with your CSV file path
-df = pd.read_csv(input_file, sep='!')
+df = pd.DataFrame(data)
 
-# Group by key columns and count the total number of steps and the number of steps with the specified status
-grouped = df.groupby(key_columns).agg(
-    total_steps=('Status', 'size'),  # Total number of steps for the key combination
-    specific_status_steps=('Status', lambda x: (x == specified_status).sum())  # Number of steps with the specified status
-).reset_index()
+# Step 1: Concatenate `k1` and `k2` to create a unique key (optional if not needed explicitly)
+df['key'] = df['k1'] + '_' + df['k2']
 
-# Check for violations:
-# - A violation occurs if a key combination has multiple steps and at least one of them has the specified status.
-violations = grouped[
-    (grouped['total_steps'] > 1) & (grouped['specific_status_steps'] >= 1)
-]
+# Step 2: Group by the key columns and concatenate values in the `value` column
+result = (
+    df.groupby(['k1', 'k2'])['value']
+    .apply(lambda x: ''.join(x))  # Concatenate values into a single string
+    .reset_index()  # Reset index to convert it back to a DataFrame
+)
 
-if violations.empty:
-    print("No violations found. Deleting all records with the specified status.")
-    
-    # Delete all records with the specified status
-    updated_df = df[df['Status'] != specified_status]
-    
-    # Save the updated DataFrame to a new CSV file
-    output_file = 'updated_input_data.csv'  # Replace with your desired output file path
-    updated_df.to_csv(output_file, sep='!', index=False)
-    
-    # Display the updated DataFrame (optional)
-    print("Updated DataFrame (after deleting all records with the specified status):")
-    print(updated_df)
-else:
-    print("Warning: Violations found. No records will be deleted.")
-    print("Violations (key combinations with multiple steps and at least one specific status):")
-    print(violations)
+# Rename the concatenated column
+result.rename(columns={"value": "concatenated_values"}, inplace=True)
+
+# Output the result
+print(result)
