@@ -1,1 +1,26 @@
-=FILTER(A1:C6, ISNUMBER(MATCH(A1:A6, E1:E3, 0)) * (SUBTOTAL(103, OFFSET(A1:A6, ROW(A1:A6)-MIN(ROW(A1:A6)), 0, 1)) > 0))
+import pandas as pd
+
+# Load the Excel file
+file_path = "your_file.xlsx"  # Update with your file path
+df = pd.read_excel(file_path)
+
+# Define the list of values to filter Column Q
+filter_values = ["value1", "value2", "value3"]  # Update with your values
+
+# Select only rows where Column Q is in the filter list
+filtered_dfs = []
+for value in filter_values:
+    filtered_df = df[df["Q"] == value]  # Filter by each value
+    unpivoted_df = filtered_df.melt(id_vars=["Q"], value_vars=df.columns[1:7], var_name="Variable", value_name="Value")  # Unpivot columns 2-7
+    unpivoted_df.reset_index(inplace=True)  # Reset index for merging
+    filtered_dfs.append(unpivoted_df)
+
+# Merge all unpivoted results on index
+final_df = filtered_dfs[0]
+for temp_df in filtered_dfs[1:]:
+    final_df = final_df.merge(temp_df, on="index", suffixes=("", "_dup"))
+
+# Save to a new Excel file
+final_df.to_excel("filtered_unpivoted.xlsx", index=False)
+
+print("Filtering, unpivoting, and merging completed. Saved as 'filtered_unpivoted.xlsx'.")
