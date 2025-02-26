@@ -1,67 +1,77 @@
 import pandas as pd
 import os
-from pathlib import Path
 
-def process_folder_chunks(folder_path, chunk_size=10000):
-    """Process Excel files in folder in chunks"""
-    all_files = [f for f in os.listdir(folder_path) if f.endswith(('.xlsx', '.xls'))]
-    for filename in all_files:
-        file_path = os.path.join(folder_path, filename)
-        # Read in chunks
-        for chunk in pd.read_excel(file_path, chunksize=chunk_size, dtype_backend='numpy_nullable'):
-            yield chunk
-
-def optimize_dtypes(df):
-    """Optimize memory usage by converting to appropriate data types"""
-    for col in df.columns:
-        if df[col].dtype == 'float64':
-            df[col] = pd.to_numeric(df[col], downcast='float')
-        elif df[col].dtype == 'int64':
-            df[col] = pd.to_numeric(df[col], downcast='integer')
-        elif df[col].dtype == 'object':
-            df[col] = df[col].astype('category')
-    return df
-
-# Set paths
-folder1_path = 'path/to/folder1'
-folder2_path = 'path/to/folder2'
-scope_file_path = 'path/to/scope_ids.xlsx'
-output_file = 'merged_filtered_output.xlsx'
-
-# Read scope IDs (assuming this file is relatively small)
-scope_ids = pd.read_excel(scope_file_path)
-scope_id_list = set(scope_ids['ID'].tolist())  # Convert to set for faster lookup
-
-# Process and merge in chunks
-chunk_size = 10000  # Adjust based on your available memory
-first_write = True
-
-with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-    for chunk1 in process_folder_chunks(folder1_path, chunk_size):
-        chunk1 = optimize_dtypes(chunk1)
-        
-        for chunk2 in process_folder_chunks(folder2_path, chunk_size):
-            chunk2 = optimize_dtypes(chunk2)
+# Function to merge files in a folder
+def merge_folder_files(folder_path):
+    all_data = []
+    
+    # Iterate through each file in the folder
+    for filename in os.listdir(folder_path):
+        if filename.endswith('.xlsx') or filename.endswith('.xls'):
+            file_path = os.path.join(folder_path, filename)
+            print(f"Processing {filename}...")
             
-            # Merge chunks
-            merged_chunk = pd.merge(chunk1, chunk2,
-                                 on='ID',  # Replace with your key column
-                                 how='inner')
+            xl = pd.ExcelFile(file_path)
+            sheet_names = xl.sheet_names
             
-            # Filter by scope IDs
-            filtered_chunk = merged_chunk[merged_chunk['ID'].isin(scope_id_list)]
+            # Get header from the first tab
+            header_df = pd.read_excel(file_path, sheet_name=sheet_names[0], nrows=1)
+            header = header_df.columns.tolist()
             
-            # Write to file
-            if not filtered_chunk.empty:
-                if first_write:
-                    filtered_chunk.to_excel(writer, index=False)
-                    first_write = False
-                else:
-                    filtered_chunk.to_excel(writer, index=False, header=False, 
-                                         mode='a', if_sheet_exists='overlay')
+            file_data = []
+            # Process each sheet
+            for sheet in sheet_names:
+                if 'SQL' not in sheet:
+                    print(f" - Reading sheet: {sheet}")
+                    # Use chunks for large files
+                    if sheet == sheet_names[0]:
+                        df = pd.read_excel(file_path, sheet_name=sheet)
+                    else:
+                        df = pd.read_excel(file_path, sheet_name=sheet, header=None, skiprows=1)
+                        df.columns = header
+                    file_data.append(df)
+            
+            # Combine tabs from this file
+            if file_data:
+                combined_file_df = pd.concat(file_data, ignore_index=True)
+                all_data.append(combined_file_df)
+    
+    # Combine all files in the folder
+    if all_data:
+        return pd.concat(all_data, ignore_index=True)
+    return None
 
-print(f"Processing complete. Output saved to {output_file}")
+# Paths to your two folders and user ID file
+folder1_path = 'path_to_folder1'  # Replace with first folder path
+folder2_path = 'path_to_folder2'  # Replace with second folder path
+userid_file = 'path_to_userid_file.csv'  # Replace with user ID file path
 
-# Optional: Memory usage check
-import sys
-print(f"Scope IDs size: {sys.getsizeof(scope_id_list)/1024/1024:.2f} MB")
+# Step 1: Merge files in each folder
+print("Merging files in Folder 1...")
+df_folder1 = merge_folder_files(folder1_path)
+print("Merging files in Folder 2...")
+df_folder2 = merge_folder_files(folder2_path)
+
+# Step 2: Join the two merged datasets
+if df_folder1 is not None and df_folder2 is not None:
+    print("Joining the two datasets...")
+    combined_df = pd.concat([df_folder1, df_folder2], ignore_index=True)
+elif df_folder1 is not None:
+    combined_df = df_folder1
+elif df_folder2 is not None:
+    combined_df = df_folder2
+else:
+    raise ValueError("No data found in either folder.")
+
+# Step 3: Filter by user IDs
+print("Filtering by user IDs...")
+user_ids = pd.read_csv(userid_file)  # Adjust if it's Excel: pd.read_excel()
+user_id_list = user_ids['userid'].tolist()  # Adjust column name if different
+
+# Filter the combined dataframe
+filtered_df = combined_df[combined_df['userid'].isin(user_id_list)]
+
+# Save the result
+output_file = 'final_filtered_output.xlsx'
+filtered_df.to_excel(output_file, index=False)
+print(f"Final filtered data saved to {output_file}")
