@@ -1,77 +1,67 @@
 import pandas as pd
+import sqlite3
 import os
 
-# Function to merge files in a folder
-def merge_folder_files(folder_path):
+# Paths to your folders and user ID file
+folder1_path = "path/to/folder1"
+folder2_path = "path/to/folder2"
+user_id_file = "path/to/user_ids.xlsx"
+
+# Connect to an in-memory SQLite database
+conn = sqlite3.connect(":memory:")
+
+# Function to process a folder and merge its Excel files into a table
+def process_folder(folder_path, table_name):
     all_data = []
-    
-    # Iterate through each file in the folder
     for filename in os.listdir(folder_path):
-        if filename.endswith('.xlsx') or filename.endswith('.xls'):
+        if filename.endswith(".xlsx"):
             file_path = os.path.join(folder_path, filename)
-            print(f"Processing {filename}...")
-            
+            # Load Excel file and get sheet names
             xl = pd.ExcelFile(file_path)
-            sheet_names = xl.sheet_names
-            
-            # Get header from the first tab
-            header_df = pd.read_excel(file_path, sheet_name=sheet_names[0], nrows=1)
-            header = header_df.columns.tolist()
-            
-            file_data = []
-            # Process each sheet
-            for sheet in sheet_names:
-                if 'SQL' not in sheet:
-                    print(f" - Reading sheet: {sheet}")
-                    # Use chunks for large files
-                    if sheet == sheet_names[0]:
-                        df = pd.read_excel(file_path, sheet_name=sheet)
-                    else:
-                        df = pd.read_excel(file_path, sheet_name=sheet, header=None, skiprows=1)
-                        df.columns = header
-                    file_data.append(df)
-            
-            # Combine tabs from this file
-            if file_data:
-                combined_file_df = pd.concat(file_data, ignore_index=True)
-                all_data.append(combined_file_df)
+            for sheet_name in xl.sheet_names:
+                # Skip sheets with "SQL" in the name
+                if "SQL" in sheet_name:
+                    continue
+                # Only process the first sheet with headers
+                df = pd.read_excel(file_path, sheet_name=sheet_name, header=0 if xl.sheet_names[0] == sheet_name else None)
+                all_data.append(df)
     
-    # Combine all files in the folder
+    # Concatenate all dataframes from the folder
     if all_data:
-        return pd.concat(all_data, ignore_index=True)
-    return None
+        merged_df = pd.concat(all_data, ignore_index=True)
+        # Write to SQLite table
+        merged_df.to_sql(table_name, conn, if_exists="replace", index=False)
 
-# Paths to your two folders and user ID file
-folder1_path = 'path_to_folder1'  # Replace with first folder path
-folder2_path = 'path_to_folder2'  # Replace with second folder path
-userid_file = 'path_to_userid_file.csv'  # Replace with user ID file path
+# Process both folders
+process_folder(folder1_path, "table1")
+process_folder(folder2_path, "table2")
 
-# Step 1: Merge files in each folder
-print("Merging files in Folder 1...")
-df_folder1 = merge_folder_files(folder1_path)
-print("Merging files in Folder 2...")
-df_folder2 = merge_folder_files(folder2_path)
+# Load user IDs from the Excel file (assuming single column in first sheet)
+user_ids_df = pd.read_excel(user_id_file)
+user_ids = tuple(user_ids_df.iloc[:, 0].tolist())  # Convert to tuple for SQL IN clause
 
-# Step 2: Join the two merged datasets
-if df_folder1 is not None and df_folder2 is not None:
-    print("Joining the two datasets...")
-    combined_df = pd.concat([df_folder1, df_folder2], ignore_index=True)
-elif df_folder1 is not None:
-    combined_df = df_folder1
-elif df_folder2 is not None:
-    combined_df = df_folder2
-else:
-    raise ValueError("No data found in either folder.")
+# Perform LEFT JOIN
+# Assume 'key_column1' in table1 and 'key_column2' in table2 are the join keys
+# Replace these with your actual key column names
+query = """
+CREATE TABLE merged_result AS
+SELECT t1.*, t2.*
+FROM table1 t1
+LEFT JOIN table2 t2
+ON t1.key_column1 = t2.key_column2
+WHERE t1.user_id IN ({})
+""".format(",".join("?" * len(user_ids)))
 
-# Step 3: Filter by user IDs
-print("Filtering by user IDs...")
-user_ids = pd.read_csv(userid_file)  # Adjust if it's Excel: pd.read_excel()
-user_id_list = user_ids['userid'].tolist()  # Adjust column name if different
+# Execute the query with user IDs
+conn.execute(query, user_ids)
 
-# Filter the combined dataframe
-filtered_df = combined_df[combined_df['userid'].isin(user_id_list)]
+# Fetch the result
+result_df = pd.read_sql_query("SELECT * FROM merged_result", conn)
 
-# Save the result
-output_file = 'final_filtered_output.xlsx'
-filtered_df.to_excel(output_file, index=False)
-print(f"Final filtered data saved to {output_file}")
+# Optional: Save the result to a file
+result_df.to_excel("merged_filtered_result.xlsx", index=False)
+
+# Close the connection
+conn.close()
+
+print("Merging, joining, and filtering complete. Result saved to 'merged_filtered_result.xlsx'.")
