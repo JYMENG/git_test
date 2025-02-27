@@ -1,46 +1,99 @@
+import sqlite3
 import pandas as pd
+import glob
 import os
-import time
+from tqdm import tqdm
 
-def process_excel_folder(folder_path):
-    """Processes all Excel files in a folder, excluding 'SQL' tabs, with debug info, only first tab header."""
-    print(f"Starting to process folder: {folder_path}")
-    all_data = []
-    file_count = 0
-    sheet_count = 0
-    try:
-        for filename in os.listdir(folder_path):
-            if filename.endswith(('.xlsx', '.xls')):
-                file_count += 1
-                file_path = os.path.join(folder_path, filename)
-                print(f"  Processing file: {filename}")
-                try:
-                    xls = pd.ExcelFile(file_path)
-                    first_sheet = True #track if first sheet.
-                    for sheet_name in xls.sheet_names:
-                        if 'SQL' not in sheet_name.upper():
-                            sheet_count += 1
-                            print(f"    Reading sheet: {sheet_name}")
-                            if first_sheet:
-                                df = pd.read_excel(xls, sheet_name=sheet_name) #read headers.
-                                first_sheet = False #no longer first sheet.
-                            else:
-                                df = pd.read_excel(xls, sheet_name=sheet_name, header=None) #no headers.
-                            all_data.append(df)
-                            print(f"      Sheet {sheet_name} read successfully. Shape: {df.shape}")
-                        else:
-                            print(f"    Skipping sheet: {sheet_name} (contains 'SQL')")
-                except Exception as e:
-                    print(f"  Error processing {filename}: {e}")
-        print(f"Folder {folder_path} processed. {file_count} files, {sheet_count} sheets processed.")
-        if all_data:
-            print("  Concatenating sheets...")
-            combined_df = pd.concat(all_data, ignore_index=True)
-            print(f"  Combined data shape: {combined_df.shape}")
-            return combined_df
-        else:
-            print(f"  No valid sheets found in {folder_path}.")
-            return None
-    except Exception as overall_error:
-        print(f"Error processing folder {folder_path}: {overall_error}")
-        return None
+def create_db_schema(conn):
+    """Create database tables with indexes"""
+    conn.executescript('''
+    CREATE TABLE IF NOT EXISTS folder1_data (
+        k2 TEXT,
+        source_file TEXT,
+        sheet_name TEXT
+    );
+    
+    CREATE TABLE IF NOT EXISTS folder2_data (
+        key1 TEXT,
+        user_name TEXT,
+        source_file TEXT,
+        sheet_name TEXT
+    );
+    
+    CREATE TABLE IF NOT EXISTS user_ids (
+        user_id TEXT PRIMARY KEY
+    );
+    
+    CREATE INDEX idx_folder1_k2 ON folder1_data(k2);
+    CREATE INDEX idx_folder2_key1 ON folder2_data(key1);
+    ''')
+
+def load_to_sqlite(conn, folder_path, folder_type, exclude_tab='SQL', chunk_size=10000):
+    """Load Excel data into SQLite in chunks"""
+    for file in tqdm(glob.glob(os.path.join(folder_path, "*.xlsx")), desc=f'Processing {folder_type}'):
+        xls = pd.ExcelFile(file)
+        for sheet_name in xls.sheet_names:
+            if 'SQL' in sheet_name:
+                continue
+                
+            for chunk in pd.read_excel(
+                file,
+                sheet_name=sheet_name,
+                chunksize=chunk_size,
+                usecols=['k2'] if folder_type == 'folder1' else ['key1', 'user_name'],
+                dtype={'k2': 'string', 'key1': 'string', 'user_name': 'string'}
+            ):
+                # Clean data and add source metadata
+                chunk = chunk.dropna()
+                chunk['source_file'] = os.path.basename(file)
+                chunk['sheet_name'] = sheet_name
+                
+                # Insert into SQLite
+                chunk.to_sql(
+                    f'{folder_type}_data',
+                    conn,
+                    if_exists='append',
+                    index=False,
+                    method='multi'
+                )
+
+def main():
+    # Configuration
+    PATHS = {
+        'folder1': '/path/to/folder1',
+        'folder2': '/path/to/folder2',
+        'file3': '/path/to/user_ids.xlsx',
+        'output_db': 'merged_data.db'
+    }
+
+    # Set up SQLite database
+    with sqlite3.connect(PATHS['output_db']) as conn:
+        create_db_schema(conn)
+        
+        # Load Folder1 data
+        load_to_sqlite(conn, PATHS['folder1'], 'folder1')
+        
+        # Load Folder2 data
+        load_to_sqlite(conn, PATHS['folder2'], 'folder2')
+        
+        # Load User IDs
+        pd.read_excel(PATHS['file3'], usecols=['user_id']).to_sql(
+            'user_ids', conn, if_exists='replace', index=False
+        )
+
+        # Execute final query
+        result = pd.read_sql('''
+            SELECT f1.k2, f2.user_name
+            FROM folder1_data f1
+            INNER JOIN folder2_data f2 ON f1.k2 = f2.key1
+            INNER JOIN user_ids u ON f2.key1 = u.user_id
+            GROUP BY f1.k2, f2.user_name  -- Remove duplicates
+        ''', conn)
+
+    # Save or display results
+    print("Merged results:")
+    print(result.head())
+    result.to_csv('final_output.csv', index=False)
+
+if __name__ == '__main__':
+    main()
