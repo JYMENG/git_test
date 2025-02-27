@@ -1,52 +1,46 @@
 import pandas as pd
 import os
+import time
 
 def process_excel_folder(folder_path):
-    """Processes all Excel files in a folder, excluding 'SQL' tabs."""
+    """Processes all Excel files in a folder, excluding 'SQL' tabs, with debug info, only first tab header."""
+    print(f"Starting to process folder: {folder_path}")
     all_data = []
-    for filename in os.listdir(folder_path):
-        if filename.endswith(('.xlsx', '.xls')):
-            file_path = os.path.join(folder_path, filename)
-            try:
-                xls = pd.ExcelFile(file_path)
-                for sheet_name in xls.sheet_names:
-                    if 'SQL' not in sheet_name.upper():  # Case-insensitive check
-                        df = pd.read_excel(xls, sheet_name=sheet_name)
-                        all_data.append(df)
-            except Exception as e:
-                print(f"Error processing {filename}: {e}")
-    if all_data:
-        return pd.concat(all_data, ignore_index=True)
-    else:
-        return None
-
-def process_user_data(user_id_file, file2, file1):
-    """Processes user data, matches keys, and filters by user IDs."""
+    file_count = 0
+    sheet_count = 0
     try:
-        user_ids = pd.read_csv(user_id_file, header=None).iloc[:, 0].tolist()  # Assuming one column
-        file2_data = pd.read_excel(file2)
-        file1_data = pd.read_excel(file1)
-
-        merged_data = pd.merge(file1_data, file2_data, left_on='Key2', right_on='Key1', how='inner')
-        filtered_data = merged_data[merged_data['User ID'].isin(user_ids)]
-        return filtered_data
-    except Exception as e:
-        print(f"Error processing user data: {e}")
+        for filename in os.listdir(folder_path):
+            if filename.endswith(('.xlsx', '.xls')):
+                file_count += 1
+                file_path = os.path.join(folder_path, filename)
+                print(f"  Processing file: {filename}")
+                try:
+                    xls = pd.ExcelFile(file_path)
+                    first_sheet = True #track if first sheet.
+                    for sheet_name in xls.sheet_names:
+                        if 'SQL' not in sheet_name.upper():
+                            sheet_count += 1
+                            print(f"    Reading sheet: {sheet_name}")
+                            if first_sheet:
+                                df = pd.read_excel(xls, sheet_name=sheet_name) #read headers.
+                                first_sheet = False #no longer first sheet.
+                            else:
+                                df = pd.read_excel(xls, sheet_name=sheet_name, header=None) #no headers.
+                            all_data.append(df)
+                            print(f"      Sheet {sheet_name} read successfully. Shape: {df.shape}")
+                        else:
+                            print(f"    Skipping sheet: {sheet_name} (contains 'SQL')")
+                except Exception as e:
+                    print(f"  Error processing {filename}: {e}")
+        print(f"Folder {folder_path} processed. {file_count} files, {sheet_count} sheets processed.")
+        if all_data:
+            print("  Concatenating sheets...")
+            combined_df = pd.concat(all_data, ignore_index=True)
+            print(f"  Combined data shape: {combined_df.shape}")
+            return combined_df
+        else:
+            print(f"  No valid sheets found in {folder_path}.")
+            return None
+    except Exception as overall_error:
+        print(f"Error processing folder {folder_path}: {overall_error}")
         return None
-
-# 1. Process Excel Folders
-folder1_data = process_excel_folder('Folder1')
-folder2_data = process_excel_folder('Folder2')
-
-# 2. Process User Data and Merge
-user_data = process_user_data('user_ids.csv', 'file2.xlsx', 'file1.xlsx') #change file names to your file names.
-
-# 3. Output Results (Optional)
-if folder1_data is not None:
-    folder1_data.to_csv('merged_folder1_data.csv', index=False)
-if folder2_data is not None:
-    folder2_data.to_csv('merged_folder2_data.csv', index=False)
-if user_data is not None:
-    user_data.to_csv('final_output.csv', index=False)
-
-print("Processing complete.")
