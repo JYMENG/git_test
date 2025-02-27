@@ -1,99 +1,86 @@
+import os
 import sqlite3
 import pandas as pd
-import glob
-import os
-from tqdm import tqdm
+from openpyxl import load_workbook
 
-def create_db_schema(conn):
-    """Create database tables with indexes"""
-    conn.executescript('''
-    CREATE TABLE IF NOT EXISTS folder1_data (
-        k2 TEXT,
-        source_file TEXT,
-        sheet_name TEXT
-    );
+# Define folders and file paths
+folder1 = "path/to/folder1"
+folder2 = "path/to/folder2"
+user_file = "path/to/user_file.xlsx"
+
+# Initialize SQLite
+conn = sqlite3.connect(":memory:")
+cursor = conn.cursor()
+
+def debug(msg):
+    """Print debug messages."""
+    print(f"[DEBUG] {msg}")
+
+def read_excel_sheets(folder, table_name):
+    """Reads all Excel sheets from files in a folder, excluding tabs with 'SQL' in the name."""
+    all_data = []
     
-    CREATE TABLE IF NOT EXISTS folder2_data (
-        key1 TEXT,
-        user_name TEXT,
-        source_file TEXT,
-        sheet_name TEXT
-    );
+    for file in os.listdir(folder):
+        file_path = os.path.join(folder, file)
+        if file.endswith(".xlsx") or file.endswith(".xls"):
+            debug(f"Reading file: {file}")
+            try:
+                wb = load_workbook(file_path, data_only=True)
+                for sheet in wb.sheetnames:
+                    if "SQL" in sheet:
+                        debug(f"Skipping sheet '{sheet}' in {file} (contains 'SQL')")
+                        continue
+
+                    df = pd.DataFrame(wb[sheet].values)
+                    if not df.empty:
+                        df["source_file"] = file
+                        df["source_sheet"] = sheet
+                        all_data.append(df)
+                        debug(f"Loaded sheet '{sheet}' from {file}, rows: {len(df)}")
+            except Exception as e:
+                debug(f"Error reading {file}: {e}")
     
-    CREATE TABLE IF NOT EXISTS user_ids (
-        user_id TEXT PRIMARY KEY
-    );
-    
-    CREATE INDEX idx_folder1_k2 ON folder1_data(k2);
-    CREATE INDEX idx_folder2_key1 ON folder2_data(key1);
-    ''')
+    if all_data:
+        final_df = pd.concat(all_data, ignore_index=True)
+        final_df.to_sql(table_name, conn, if_exists="replace", index=False)
+        debug(f"Inserted {len(final_df)} rows into {table_name}")
+    else:
+        debug(f"No valid data found in {folder}")
 
-def load_to_sqlite(conn, folder_path, folder_type, exclude_tab='SQL', chunk_size=10000):
-    """Load Excel data into SQLite in chunks"""
-    for file in tqdm(glob.glob(os.path.join(folder_path, "*.xlsx")), desc=f'Processing {folder_type}'):
-        xls = pd.ExcelFile(file)
-        for sheet_name in xls.sheet_names:
-            if 'SQL' in sheet_name:
-                continue
-                
-            for chunk in pd.read_excel(
-                file,
-                sheet_name=sheet_name,
-                chunksize=chunk_size,
-                usecols=['k2'] if folder_type == 'folder1' else ['key1', 'user_name'],
-                dtype={'k2': 'string', 'key1': 'string', 'user_name': 'string'}
-            ):
-                # Clean data and add source metadata
-                chunk = chunk.dropna()
-                chunk['source_file'] = os.path.basename(file)
-                chunk['sheet_name'] = sheet_name
-                
-                # Insert into SQLite
-                chunk.to_sql(
-                    f'{folder_type}_data',
-                    conn,
-                    if_exists='append',
-                    index=False,
-                    method='multi'
-                )
+# Process both folders
+read_excel_sheets(folder1, "table1")
+read_excel_sheets(folder2, "table2")
 
-def main():
-    # Configuration
-    PATHS = {
-        'folder1': '/path/to/folder1',
-        'folder2': '/path/to/folder2',
-        'file3': '/path/to/user_ids.xlsx',
-        'output_db': 'merged_data.db'
-    }
+# Load user file
+try:
+    user_df = pd.read_excel(user_file, sheet_name=None)
+    user_data = None
+    for sheet_name, df in user_df.items():
+        if not df.empty:
+            user_data = df
+            break  # Assume first non-empty sheet is correct
+    if user_data is not None:
+        user_data.to_sql("user_table", conn, if_exists="replace", index=False)
+        debug(f"User data loaded with {len(user_data)} rows")
+    else:
+        debug("No valid user data found")
+except Exception as e:
+    debug(f"Error reading user file: {e}")
 
-    # Set up SQLite database
-    with sqlite3.connect(PATHS['output_db']) as conn:
-        create_db_schema(conn)
-        
-        # Load Folder1 data
-        load_to_sqlite(conn, PATHS['folder1'], 'folder1')
-        
-        # Load Folder2 data
-        load_to_sqlite(conn, PATHS['folder2'], 'folder2')
-        
-        # Load User IDs
-        pd.read_excel(PATHS['file3'], usecols=['user_id']).to_sql(
-            'user_ids', conn, if_exists='replace', index=False
-        )
+# Query matching records
+query = """
+SELECT t2.[user name], t1.k2 
+FROM table1 t1
+JOIN table2 t2 ON t1.k2 = t2.k1
+WHERE t2.[user name] IN (SELECT user_id FROM user_table)
+"""
+try:
+    result_df = pd.read_sql(query, conn)
+    debug(f"Query executed, retrieved {len(result_df)} matching records")
+    print(result_df)
+except Exception as e:
+    debug(f"Query execution error: {e}")
 
-        # Execute final query
-        result = pd.read_sql('''
-            SELECT f1.k2, f2.user_name
-            FROM folder1_data f1
-            INNER JOIN folder2_data f2 ON f1.k2 = f2.key1
-            INNER JOIN user_ids u ON f2.key1 = u.user_id
-            GROUP BY f1.k2, f2.user_name  -- Remove duplicates
-        ''', conn)
-
-    # Save or display results
-    print("Merged results:")
-    print(result.head())
-    result.to_csv('final_output.csv', index=False)
-
-if __name__ == '__main__':
-    main()
+# Cleanup
+conn.close()
+debug("SQLite connection closed.")
