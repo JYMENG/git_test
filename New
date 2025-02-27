@@ -1,85 +1,71 @@
-import os
-import sqlite3
 import pandas as pd
+import os
+from pathlib import Path
 
-# Define folders and file paths
-folder1 = "path/to/folder1"
-folder2 = "path/to/folder2"
-user_file = "path/to/user_file.xlsx"
-
-# Initialize SQLite
-conn = sqlite3.connect(":memory:")
-cursor = conn.cursor()
-
-def debug(msg):
-    """Print debug messages."""
-    print(f"[DEBUG] {msg}")
-
-def read_excel_sheets(folder, table_name):
-    """Reads all Excel sheets from files in a folder, excluding sheets with 'SQL' in the name."""
+# Function to merge Excel files from a folder
+def merge_excel_files(folder_path, output_file):
     all_data = []
+    first_file = True
     
-    for file in os.listdir(folder):
-        file_path = os.path.join(folder, file)
-        if file.endswith(".xlsx") or file.endswith(".xls"):
-            debug(f"Reading file: {file}")
-            try:
-                sheets = pd.read_excel(file_path, sheet_name=None, engine="openpyxl")  # Load all sheets
-                
-                for sheet_name, df in sheets.items():
-                    if "SQL" in sheet_name:
-                        debug(f"Skipping sheet '{sheet_name}' in {file} (contains 'SQL')")
-                        continue
-
-                    if not df.empty:
-                        df["source_file"] = file
-                        df["source_sheet"] = sheet_name
-                        all_data.append(df)
-                        debug(f"Loaded sheet '{sheet_name}' from {file}, rows: {len(df)}")
-            except Exception as e:
-                debug(f"Error reading {file}: {e}")
+    # Iterate through all Excel files in the folder
+    for file in Path(folder_path).glob('*.xlsx'):
+        print(f"Processing {file}")
+        # Read all sheets from the current Excel file
+        xl = pd.ExcelFile(file)
+        for sheet_name in xl.sheet_names:
+            # For the first tab of the first file, keep headers
+            if first_file and sheet_name == xl.sheet_names[0]:
+                df = pd.read_excel(file, sheet_name=sheet_name)
+                first_file = False
+            else:
+                # Skip the header row for all other tabs/files
+                df = pd.read_excel(file, sheet_name=sheet_name, header=None, skiprows=1)
+                # Assign column names from the first tab
+                df.columns = all_data[0].columns
+            
+            all_data.append(df)
     
-    if all_data:
-        final_df = pd.concat(all_data, ignore_index=True)
-        final_df.to_sql(table_name, conn, if_exists="replace", index=False)
-        debug(f"Inserted {len(final_df)} rows into {table_name}")
-    else:
-        debug(f"No valid data found in {folder}")
+    # Concatenate all dataframes
+    merged_df = pd.concat(all_data, ignore_index=True)
+    # Save to CSV (more efficient for huge files than Excel)
+    merged_df.to_csv(output_file, index=False)
+    print(f"Saved merged file to {output_file}")
+    return merged_df
 
-# Process both folders
-read_excel_sheets(folder1, "table1")
-read_excel_sheets(folder2, "table2")
+# Paths to your folders and files (update these accordingly)
+folder1_path = 'path/to/folder1'
+folder2_path = 'path/to/folder2'
+user_file_path = 'path/to/user_file.xlsx'
+output_folder1 = 'merged_folder1.csv'
+output_folder2 = 'merged_folder2.csv'
+final_output = 'final_output.csv'
 
-# Load user file
-try:
-    user_df = pd.read_excel(user_file, sheet_name=None, engine="openpyxl")
-    user_data = None
-    for sheet_name, df in user_df.items():
-        if not df.empty:
-            user_data = df
-            break  # Assume first non-empty sheet is correct
-    if user_data is not None:
-        user_data.to_sql("user_table", conn, if_exists="replace", index=False)
-        debug(f"User data loaded with {len(user_data)} rows")
-    else:
-        debug("No valid user data found")
-except Exception as e:
-    debug(f"Error reading user file: {e}")
+# Step 1: Merge files from both folders
+print("Merging files from Folder 1...")
+df1 = merge_excel_files(folder1_path, output_folder1)
+print("Merging files from Folder 2...")
+df2 = merge_excel_files(folder2_path, output_folder2)
 
-# Query matching records
-query = """
-SELECT t2.[user name], t1.k2 
-FROM table1 t1
-JOIN table2 t2 ON t1.k2 = t2.k1
-WHERE t2.[user name] IN (SELECT user_id FROM user_table)
-"""
-try:
-    result_df = pd.read_sql(query, conn)
-    debug(f"Query executed, retrieved {len(result_df)} matching records")
-    print(result_df)
-except Exception as e:
-    debug(f"Query execution error: {e}")
+# Step 2: Load user info file
+print("Loading user info file...")
+df3 = pd.read_excel(user_file_path)
 
-# Cleanup
-conn.close()
-debug("SQLite connection closed.")
+# Step 3: Join the dataframes
+# Assuming key1 is in df1, key2 is in df2, and 'user' is the username column
+# Adjust column names based on your actual data
+print("Performing join operation...")
+# Merge df1 and df2 on key1 = key2
+merged_df = pd.merge(df1, df2, left_on='key1', right_on='key2', how='inner')
+
+# Filter rows where username matches users in df3
+# Assuming 'user' is the column name in all files for username
+user_list = df3['user'].tolist()
+final_df = merged_df[merged_df['user'].isin(user_list)]
+
+# Step 4: Save the final result
+print("Saving final output...")
+final_df.to_csv(final_output, index=False)
+print(f"Final output saved to {final_output}")
+
+# Optional: Memory cleanup
+del df1, df2, df3, merged_df, final_df
