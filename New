@@ -1,146 +1,77 @@
-import os
 import pandas as pd
-import sqlite3
-from openpyxl import load_workbook  # Efficient for .xlsx
-from pyxlsb import open_workbook as open_xlsb  # Efficient for .xlsb
+import glob
+import os
+from tqdm import tqdm  # For progress monitoring
 
-# --- CONFIGURATION ---
-FOLDER1 = "path_to_folder1"  # Update with actual path
-FOLDER2 = "path_to_folder2"  # Update with actual path
-USER_FILE = "path_to_user_file.xlsx"  # Update with actual path
-DB_PATH = "merged_data.db"
-BATCH_SIZE = 50000  # Number of rows to insert per batch
-DEBUG = True  # Set to False to disable debugging logs
+def optimized_read_folder(folder_path, exclude_tab='SQL', chunksize=10000):
+    """Memory-efficient folder reading with chunk processing"""
+    all_files = glob.glob(os.path.join(folder_path, "*.xlsx"))
+    dfs = []
 
-# --- SQLITE CONNECTION ---
-conn = sqlite3.connect(DB_PATH)
-cursor = conn.cursor()
-
-
-def log(message):
-    """Prints debug messages if enabled."""
-    if DEBUG:
-        print(message)
-
-
-# --- FUNCTION TO PROCESS EXCEL FILES IN CHUNKS WITHOUT CHUNKSIZE ---
-def process_excel(folder, table_name):
-    """Reads large Excel files row-by-row and inserts directly into SQLite."""
-    log(f"Processing folder: {folder}")
-
-    cursor.execute(f"DROP TABLE IF EXISTS {table_name}")  # Clean previous data
-
-    for file in os.listdir(folder):
-        file_path = os.path.join(folder, file)
-
-        if file.endswith(".xlsx"):
-            log(f"  - Reading file: {file} (using openpyxl)")
-            wb = load_workbook(file_path, read_only=True)
-            sheets = [s for s in wb.sheetnames if "SQL" not in s]  # Ignore 'SQL' sheets
+    for file in tqdm(all_files, desc="Processing Files"):
+        xls = pd.ExcelFile(file)
+        for sheet_name in xls.sheet_names:
+            if exclude_tab.lower() in sheet_name.lower():
+                continue
+                
+            # Read only necessary columns upfront
+            usecols = ['k2'] if 'folder1' in folder_path else ['key1', 'user_name']
+            df_chunks = pd.read_excel(
+                file,
+                sheet_name=sheet_name,
+                usecols=usecols,
+                engine='openpyxl',
+                dtype={'k2': 'category', 'key1': 'category', 'user_name': 'category'},
+                chunksize=chunksize
+            )
             
-            for sheet_name in sheets:
-                log(f"    * Processing sheet: {sheet_name}")
-                ws = wb[sheet_name]
-                
-                # Read header
-                header = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1, values_only=True))]
-                
-                batch = []
-                for row in ws.iter_rows(min_row=2, values_only=True):
-                    batch.append(row)
-                    if len(batch) >= BATCH_SIZE:
-                        df_batch = pd.DataFrame(batch, columns=header)
-                        df_batch.to_sql(table_name, conn, if_exists="append", index=False)
-                        log(f"      * Inserted {len(df_batch)} rows.")
-                        batch.clear()
+            for chunk in df_chunks:
+                # Perform early filtering and type conversion
+                chunk = chunk.dropna(subset=usecols)
+                dfs.append(chunk)
 
-                if batch:
-                    df_batch = pd.DataFrame(batch, columns=header)
-                    df_batch.to_sql(table_name, conn, if_exists="append", index=False)
-                    log(f"      * Inserted remaining {len(df_batch)} rows.")
+    return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
 
-        elif file.endswith(".xlsb"):  # Handling Binary Excel files
-            log(f"  - Reading file: {file} (using pyxlsb)")
-            with open_xlsb(file_path) as wb:
-                sheets = [s for s in wb.sheets if "SQL" not in s]  # Ignore 'SQL' sheets
+# Configuration (update these paths)
+PATHS = {
+    'folder1': '/path/to/folder1',
+    'folder2': '/path/to/folder2',
+    'file3': '/path/to/user_ids.xlsx'
+}
 
-                for sheet_name in sheets:
-                    log(f"    * Processing sheet: {sheet_name}")
-                    batch = []
-                    with wb.get_sheet(sheet_name) as sheet:
-                        rows = sheet.rows()
-                        header = [cell.v for cell in next(rows)]  # Read header
+# Read data with optimized parameters
+print("Loading Folder1 data...")
+df_folder1 = optimized_read_folder(PATHS['folder1'])
 
-                        for row in rows:
-                            batch.append([cell.v for cell in row])
-                            if len(batch) >= BATCH_SIZE:
-                                df_batch = pd.DataFrame(batch, columns=header)
-                                df_batch.to_sql(table_name, conn, if_exists="append", index=False)
-                                log(f"      * Inserted {len(df_batch)} rows.")
-                                batch.clear()
+print("\nLoading Folder2 data...")
+df_folder2 = optimized_read_folder(PATHS['folder2'])
 
-                        if batch:
-                            df_batch = pd.DataFrame(batch, columns=header)
-                            df_batch.to_sql(table_name, conn, if_exists="append", index=False)
-                            log(f"      * Inserted remaining {len(df_batch)} rows.")
+print("\nLoading User IDs...")
+user_ids = pd.read_excel(PATHS['file3'], usecols=['user_id'], dtype={'user_id': 'category'})
 
-    log(f"Completed processing for {folder}.")
+# Memory-efficient merge
+print("\nMerging datasets...")
+merged = pd.merge(
+    df_folder1[['k2']],
+    df_folder2[['key1', 'user_name']],
+    left_on='k2',
+    right_on='key1',
+    how='inner',
+    validate='one_to_one'  # Ensure expected relationship
+).drop_duplicates()
 
+# Final filtering
+print("Filtering results...")
+final_output = merged[merged['key1'].isin(user_ids['user_id'])][['k2', 'user_name']]
 
-# --- PROCESS BOTH FOLDERS INTO SQLITE ---
-process_excel(FOLDER1, "folder1_merged")
-process_excel(FOLDER2, "folder2_merged")
+# Save memory by converting to optimal types
+final_output = final_output.astype({
+    'k2': 'category',
+    'user_name': 'category'
+})
 
-# --- CREATE INDEXES FOR FAST JOINS ---
-log("Creating indexes on key columns...")
-cursor.execute("CREATE INDEX IF NOT EXISTS idx_f1_key ON folder1_merged(KeyColumn1)")
-cursor.execute("CREATE INDEX IF NOT EXISTS idx_f2_key ON folder2_merged(KeyColumn2)")
-conn.commit()
-log("Indexes created successfully.")
+print("\nFinal output preview:")
+print(final_output.head())
 
-# --- PERFORM LEFT JOIN ---
-log("Performing LEFT JOIN on merged tables...")
-cursor.execute("DROP TABLE IF EXISTS merged_results")
-query = """
-CREATE TABLE merged_results AS
-SELECT f1.*, f2.*
-FROM folder1_merged AS f1
-LEFT JOIN folder2_merged AS f2
-ON f1.KeyColumn1 = f2.KeyColumn2
-"""
-cursor.execute(query)
-conn.commit()
-log("LEFT JOIN completed successfully.")
-
-# --- LOAD USER FILTER LIST ---
-log(f"Loading user filter list from {USER_FILE}...")
-df_users = pd.read_excel(USER_FILE, usecols=["UserID"])
-user_ids = tuple(df_users["UserID"].tolist())  # Convert to tuple for SQL filtering
-log(f"Loaded {len(user_ids)} user IDs.")
-
-# --- FILTER & SAVE RESULTS IN BATCHES ---
-log("Applying user filter and exporting results in chunks...")
-OUTPUT_FILE = "filtered_results.csv"
-chunk_offset = 0
-
-with open(OUTPUT_FILE, "w") as f_out:
-    while True:
-        filtered_query = f"""
-        SELECT * FROM merged_results
-        WHERE UserID IN {user_ids}
-        LIMIT {BATCH_SIZE} OFFSET {chunk_offset}
-        """
-        df_chunk = pd.read_sql(filtered_query, conn)
-
-        if df_chunk.empty:
-            break  # Stop if no more data
-
-        df_chunk.to_csv(f_out, mode="a", header=(chunk_offset == 0), index=False)
-        log(f"  * Saved {len(df_chunk)} rows to {OUTPUT_FILE} (offset {chunk_offset}).")
-        chunk_offset += BATCH_SIZE
-
-log("Filtering & export completed!")
-
-# --- CLEANUP ---
-conn.close()
-log("SQLite connection closed.")
+# To save efficiently
+final_output.to_parquet('final_output.parquet')  # More efficient than CSV
