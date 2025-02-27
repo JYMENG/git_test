@@ -1,71 +1,117 @@
-import pandas as pd
 import os
-from pathlib import Path
+import sqlite3
+from openpyxl import load_workbook
+import csv
 
-# Function to merge Excel files from a folder
-def merge_excel_files(folder_path, output_file):
-    all_data = []
-    first_file = True
+def process_folder(folder_path, db_path, table_name, required_columns):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
     
-    # Iterate through all Excel files in the folder
-    for file in Path(folder_path).glob('*.xlsx'):
-        print(f"Processing {file}")
-        # Read all sheets from the current Excel file
-        xl = pd.ExcelFile(file)
-        for sheet_name in xl.sheet_names:
-            # For the first tab of the first file, keep headers
-            if first_file and sheet_name == xl.sheet_names[0]:
-                df = pd.read_excel(file, sheet_name=sheet_name)
-                first_file = False
-            else:
-                # Skip the header row for all other tabs/files
-                df = pd.read_excel(file, sheet_name=sheet_name, header=None, skiprows=1)
-                # Assign column names from the first tab
-                df.columns = all_data[0].columns
-            
-            all_data.append(df)
+    # Create table with required columns as TEXT for simplicity
+    create_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join([f'{col} TEXT' for col in required_columns)})"
+    cursor.execute(create_sql)
+    conn.commit()
     
-    # Concatenate all dataframes
-    merged_df = pd.concat(all_data, ignore_index=True)
-    # Save to CSV (more efficient for huge files than Excel)
-    merged_df.to_csv(output_file, index=False)
-    print(f"Saved merged file to {output_file}")
-    return merged_df
+    for filename in os.listdir(folder_path):
+        if not filename.lower().endswith(('.xlsx', '.xls')):
+            continue
+        filepath = os.path.join(folder_path, filename)
+        try:
+            wb = load_workbook(filepath, read_only=True)
+            for sheet_name in wb.sheetnames:
+                if 'SQL' in sheet_name:
+                    continue
+                ws = wb[sheet_name]
+                headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1))]
+                # Check if all required columns are present
+                col_indices = {}
+                valid = True
+                for col in required_columns:
+                    try:
+                        col_indices[col] = headers.index(col)
+                    except ValueError:
+                        valid = False
+                        break
+                if not valid:
+                    print(f"Skipping sheet '{sheet_name}' in file '{filename}' due to missing columns.")
+                    continue
+                # Prepare insert statement
+                insert_sql = f"INSERT INTO {table_name} ({', '.join(required_columns)}) VALUES ({', '.join(['?']*len(required_columns))})"
+                # Iterate over data rows
+                for row in ws.iter_rows(min_row=2):
+                    row_data = []
+                    for col in required_columns:
+                        cell = row[col_indices[col]]
+                        row_data.append(str(cell.value) if cell.value is not None else None)
+                    cursor.execute(insert_sql, row_data)
+                conn.commit()
+            wb.close()
+        except Exception as e:
+            print(f"Error processing {filename}: {e}")
+    conn.close()
 
-# Paths to your folders and files (update these accordingly)
-folder1_path = 'path/to/folder1'
-folder2_path = 'path/to/folder2'
-user_file_path = 'path/to/user_file.xlsx'
-output_folder1 = 'merged_folder1.csv'
-output_folder2 = 'merged_folder2.csv'
-final_output = 'final_output.csv'
+def import_user_ids(file3_path, db_path):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("CREATE TABLE IF NOT EXISTS user_ids (user_id TEXT)")
+    # Assuming file3 is CSV with one column, adjust if different
+    with open(file3_path, 'r') as f:
+        reader = csv.reader(f)
+        next(reader)  # Skip header if present
+        for row in reader:
+            cursor.execute("INSERT INTO user_ids VALUES (?)", (row[0],))
+    conn.commit()
+    conn.close()
 
-# Step 1: Merge files from both folders
-print("Merging files from Folder 1...")
-df1 = merge_excel_files(folder1_path, output_folder1)
-print("Merging files from Folder 2...")
-df2 = merge_excel_files(folder2_path, output_folder2)
+def main(folder1, folder2, file3, output_db):
+    # Process folders into separate databases
+    db1 = 'dataset1.db'
+    db2 = 'dataset2.db'
+    
+    print("Processing Folder 1...")
+    process_folder(folder1, db1, 'dataset1', ['k2'])
+    
+    print("Processing Folder 2...")
+    process_folder(folder2, db2, 'dataset2', ['key1', 'user_name'])
+    
+    print("Importing User IDs...")
+    import_user_ids(file3, output_db)
+    
+    # Connect to output DB and attach other databases
+    conn = sqlite3.connect(output_db)
+    cursor = conn.cursor()
+    
+    # Attach both dataset databases
+    cursor.execute(f"ATTACH DATABASE '{db1}' AS d1")
+    cursor.execute(f"ATTACH DATABASE '{db2}' AS d2")
+    
+    # Create indexes for performance
+    cursor.execute("CREATE INDEX IF NOT EXISTS d1.idx_k2 ON dataset1(k2)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS d2.idx_key1 ON dataset2(key1)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_id ON user_ids(user_id)")
+    
+    # Perform the join and filter
+    query = """
+    SELECT d1.dataset1.k2, d2.dataset2.user_name
+    FROM d1.dataset1
+    INNER JOIN d2.dataset2 ON d1.dataset1.k2 = d2.dataset2.key1
+    WHERE d2.dataset2.user_name IN (SELECT user_id FROM user_ids)
+    """
+    cursor.execute(query)
+    results = cursor.fetchall()
+    
+    # Display results
+    print("Results (k2, user_name):")
+    for row in results:
+        print(row)
+    
+    conn.close()
 
-# Step 2: Load user info file
-print("Loading user info file...")
-df3 = pd.read_excel(user_file_path)
-
-# Step 3: Join the dataframes
-# Assuming key1 is in df1, key2 is in df2, and 'user' is the username column
-# Adjust column names based on your actual data
-print("Performing join operation...")
-# Merge df1 and df2 on key1 = key2
-merged_df = pd.merge(df1, df2, left_on='key1', right_on='key2', how='inner')
-
-# Filter rows where username matches users in df3
-# Assuming 'user' is the column name in all files for username
-user_list = df3['user'].tolist()
-final_df = merged_df[merged_df['user'].isin(user_list)]
-
-# Step 4: Save the final result
-print("Saving final output...")
-final_df.to_csv(final_output, index=False)
-print(f"Final output saved to {final_output}")
-
-# Optional: Memory cleanup
-del df1, df2, df3, merged_df, final_df
+if __name__ == "__main__":
+    # Update these paths according to your environment
+    FOLDER1 = 'path/to/folder1'
+    FOLDER2 = 'path/to/folder2'
+    FILE3 = 'path/to/file3.csv'
+    OUTPUT_DB = 'output.db'
+    
+    main(FOLDER1, FOLDER2, FILE3, OUTPUT_DB)
