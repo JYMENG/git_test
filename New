@@ -3,9 +3,9 @@ import pandas as pd
 import sqlite3
 
 # --- CONFIGURATION ---
-FOLDER1 = "path_to_folder1"  # Update this with actual path
-FOLDER2 = "path_to_folder2"  # Update this with actual path
-USER_FILE = "path_to_user_file.xlsx"  # Update this with actual path
+FOLDER1 = "path_to_folder1"  # Update with actual path
+FOLDER2 = "path_to_folder2"  # Update with actual path
+USER_FILE = "path_to_user_file.xlsx"  # Update with actual path
 DB_PATH = "merged_data.db"
 CHUNKSIZE = 50000  # Number of rows to process per chunk
 DEBUG = True  # Set to False to disable debugging logs
@@ -16,15 +16,14 @@ cursor = conn.cursor()
 
 
 def log(message):
-    """Prints debug messages if debugging is enabled."""
+    """Prints debug messages if enabled."""
     if DEBUG:
         print(message)
 
 
-# --- FUNCTION TO PROCESS FOLDERS ---
-def process_folder(folder, table_name):
-    """Reads all Excel files in a folder, extracts the first sheet (excluding 'SQL' sheets), 
-    and loads data into SQLite in chunks."""
+# --- FUNCTION TO PROCESS EXCEL FILES WITHOUT TEMP CSV ---
+def process_excel(folder, table_name):
+    """Reads large Excel files in chunks and inserts into SQLite."""
     log(f"Processing folder: {folder}")
 
     cursor.execute(f"DROP TABLE IF EXISTS {table_name}")  # Clean previous data
@@ -32,31 +31,30 @@ def process_folder(folder, table_name):
     for file in os.listdir(folder):
         if file.endswith(".xlsx"):
             file_path = os.path.join(folder, file)
-            log(f"  - Processing file: {file}")
+            log(f"  - Reading file: {file}")
 
-            xl = pd.ExcelFile(file_path)
+            xl = pd.ExcelFile(file_path, engine="openpyxl")  # Use openpyxl for .xlsx
 
-            # Get sheet names, ignoring any named 'SQL'
-            sheets = [s for s in xl.sheet_names if 'SQL' not in s]
+            sheets = [s for s in xl.sheet_names if "SQL" not in s]  # Ignore 'SQL' sheets
             if not sheets:
                 log(f"    * No valid sheets found in {file}, skipping.")
                 continue
 
-            df_iter = pd.read_excel(file_path, sheet_name=sheets[0], chunksize=CHUNKSIZE)
+            for sheet_name in sheets:
+                log(f"    * Processing sheet: {sheet_name}")
+                for chunk in pd.read_excel(file_path, sheet_name=sheet_name, engine="openpyxl", chunksize=CHUNKSIZE):
+                    chunk.columns = chunk.iloc[0]  # Set first row as header
+                    chunk = chunk[1:]  # Remove header row
 
-            for i, chunk in enumerate(df_iter):
-                chunk.columns = chunk.iloc[0]  # Set first row as header
-                chunk = chunk[1:]  # Remove header row from data
-
-                chunk.to_sql(table_name, conn, if_exists="append", index=False)
-                log(f"    * Inserted chunk {i+1} into {table_name}.")
+                    chunk.to_sql(table_name, conn, if_exists="append", index=False)
+                    log(f"      * Inserted {len(chunk)} rows from {sheet_name}.")
 
     log(f"Completed processing for {folder}.")
 
 
-# --- PROCESS FOLDERS INTO SQLITE ---
-process_folder(FOLDER1, "folder1_merged")
-process_folder(FOLDER2, "folder2_merged")
+# --- PROCESS BOTH FOLDERS INTO SQLITE ---
+process_excel(FOLDER1, "folder1_merged")
+process_excel(FOLDER2, "folder2_merged")
 
 # --- CREATE INDEXES FOR FAST JOINS ---
 log("Creating indexes on key columns...")
