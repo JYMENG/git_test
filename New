@@ -7,7 +7,7 @@ FOLDER1 = "path_to_folder1"  # Update with actual path
 FOLDER2 = "path_to_folder2"  # Update with actual path
 USER_FILE = "path_to_user_file.xlsx"  # Update with actual path
 DB_PATH = "merged_data.db"
-CHUNKSIZE = 50000  # Number of rows to process per chunk
+BATCH_SIZE = 50000  # Number of rows to process per batch
 DEBUG = True  # Set to False to disable debugging logs
 
 # --- SQLITE CONNECTION ---
@@ -21,9 +21,9 @@ def log(message):
         print(message)
 
 
-# --- FUNCTION TO PROCESS EXCEL FILES WITHOUT TEMP CSV ---
+# --- FUNCTION TO PROCESS LARGE EXCEL FILES WITHOUT CHUNKSIZE ---
 def process_excel(folder, table_name):
-    """Reads large Excel files in chunks and inserts into SQLite."""
+    """Reads large Excel files sheet-by-sheet in batches and inserts directly into SQLite."""
     log(f"Processing folder: {folder}")
 
     cursor.execute(f"DROP TABLE IF EXISTS {table_name}")  # Clean previous data
@@ -33,7 +33,7 @@ def process_excel(folder, table_name):
             file_path = os.path.join(folder, file)
             log(f"  - Reading file: {file}")
 
-            xl = pd.ExcelFile(file_path, engine="openpyxl")  # Use openpyxl for .xlsx
+            xl = pd.ExcelFile(file_path, engine="openpyxl")
 
             sheets = [s for s in xl.sheet_names if "SQL" not in s]  # Ignore 'SQL' sheets
             if not sheets:
@@ -42,12 +42,29 @@ def process_excel(folder, table_name):
 
             for sheet_name in sheets:
                 log(f"    * Processing sheet: {sheet_name}")
-                for chunk in pd.read_excel(file_path, sheet_name=sheet_name, engine="openpyxl", chunksize=CHUNKSIZE):
-                    chunk.columns = chunk.iloc[0]  # Set first row as header
-                    chunk = chunk[1:]  # Remove header row
+                
+                df_iter = pd.read_excel(file_path, sheet_name=sheet_name, engine="openpyxl", iterator=True)
+                first_chunk = next(df_iter)  # Read first chunk to get column headers
+                
+                first_chunk.columns = first_chunk.iloc[0]  # Set first row as header
+                first_chunk = first_chunk[1:]  # Remove header row
 
-                    chunk.to_sql(table_name, conn, if_exists="append", index=False)
-                    log(f"      * Inserted {len(chunk)} rows from {sheet_name}.")
+                first_chunk.to_sql(table_name, conn, if_exists="append", index=False)
+                log(f"      * Inserted {len(first_chunk)} rows from {sheet_name}.")
+                
+                batch = []
+                for row in df_iter:
+                    batch.append(row)
+                    if len(batch) >= BATCH_SIZE:
+                        df_batch = pd.DataFrame(batch)
+                        df_batch.to_sql(table_name, conn, if_exists="append", index=False)
+                        log(f"      * Inserted {len(df_batch)} rows from {sheet_name}.")
+                        batch.clear()
+
+                if batch:
+                    df_batch = pd.DataFrame(batch)
+                    df_batch.to_sql(table_name, conn, if_exists="append", index=False)
+                    log(f"      * Inserted remaining {len(df_batch)} rows from {sheet_name}.")
 
     log(f"Completed processing for {folder}.")
 
@@ -83,7 +100,7 @@ df_users = pd.read_excel(USER_FILE, usecols=["UserID"])
 user_ids = tuple(df_users["UserID"].tolist())  # Convert to tuple for SQL filtering
 log(f"Loaded {len(user_ids)} user IDs.")
 
-# --- FILTER & SAVE RESULTS IN CHUNKS ---
+# --- FILTER & SAVE RESULTS IN BATCHES ---
 log("Applying user filter and exporting results in chunks...")
 OUTPUT_FILE = "filtered_results.csv"
 chunk_offset = 0
@@ -93,7 +110,7 @@ with open(OUTPUT_FILE, "w") as f_out:
         filtered_query = f"""
         SELECT * FROM merged_results
         WHERE UserID IN {user_ids}
-        LIMIT {CHUNKSIZE} OFFSET {chunk_offset}
+        LIMIT {BATCH_SIZE} OFFSET {chunk_offset}
         """
         df_chunk = pd.read_sql(filtered_query, conn)
 
@@ -102,7 +119,7 @@ with open(OUTPUT_FILE, "w") as f_out:
 
         df_chunk.to_csv(f_out, mode="a", header=(chunk_offset == 0), index=False)
         log(f"  * Saved {len(df_chunk)} rows to {OUTPUT_FILE} (offset {chunk_offset}).")
-        chunk_offset += CHUNKSIZE
+        chunk_offset += BATCH_SIZE
 
 log("Filtering & export completed!")
 
