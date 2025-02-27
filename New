@@ -1,77 +1,52 @@
 import pandas as pd
-import glob
 import os
-from tqdm import tqdm  # For progress monitoring
 
-def optimized_read_folder(folder_path, exclude_tab='SQL', chunksize=10000):
-    """Memory-efficient folder reading with chunk processing"""
-    all_files = glob.glob(os.path.join(folder_path, "*.xlsx"))
-    dfs = []
+def process_excel_folder(folder_path):
+    """Processes all Excel files in a folder, excluding 'SQL' tabs."""
+    all_data = []
+    for filename in os.listdir(folder_path):
+        if filename.endswith(('.xlsx', '.xls')):
+            file_path = os.path.join(folder_path, filename)
+            try:
+                xls = pd.ExcelFile(file_path)
+                for sheet_name in xls.sheet_names:
+                    if 'SQL' not in sheet_name.upper():  # Case-insensitive check
+                        df = pd.read_excel(xls, sheet_name=sheet_name)
+                        all_data.append(df)
+            except Exception as e:
+                print(f"Error processing {filename}: {e}")
+    if all_data:
+        return pd.concat(all_data, ignore_index=True)
+    else:
+        return None
 
-    for file in tqdm(all_files, desc="Processing Files"):
-        xls = pd.ExcelFile(file)
-        for sheet_name in xls.sheet_names:
-            if exclude_tab.lower() in sheet_name.lower():
-                continue
-                
-            # Read only necessary columns upfront
-            usecols = ['k2'] if 'folder1' in folder_path else ['key1', 'user_name']
-            df_chunks = pd.read_excel(
-                file,
-                sheet_name=sheet_name,
-                usecols=usecols,
-                engine='openpyxl',
-                dtype={'k2': 'category', 'key1': 'category', 'user_name': 'category'},
-                chunksize=chunksize
-            )
-            
-            for chunk in df_chunks:
-                # Perform early filtering and type conversion
-                chunk = chunk.dropna(subset=usecols)
-                dfs.append(chunk)
+def process_user_data(user_id_file, file2, file1):
+    """Processes user data, matches keys, and filters by user IDs."""
+    try:
+        user_ids = pd.read_csv(user_id_file, header=None).iloc[:, 0].tolist()  # Assuming one column
+        file2_data = pd.read_excel(file2)
+        file1_data = pd.read_excel(file1)
 
-    return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
+        merged_data = pd.merge(file1_data, file2_data, left_on='Key2', right_on='Key1', how='inner')
+        filtered_data = merged_data[merged_data['User ID'].isin(user_ids)]
+        return filtered_data
+    except Exception as e:
+        print(f"Error processing user data: {e}")
+        return None
 
-# Configuration (update these paths)
-PATHS = {
-    'folder1': '/path/to/folder1',
-    'folder2': '/path/to/folder2',
-    'file3': '/path/to/user_ids.xlsx'
-}
+# 1. Process Excel Folders
+folder1_data = process_excel_folder('Folder1')
+folder2_data = process_excel_folder('Folder2')
 
-# Read data with optimized parameters
-print("Loading Folder1 data...")
-df_folder1 = optimized_read_folder(PATHS['folder1'])
+# 2. Process User Data and Merge
+user_data = process_user_data('user_ids.csv', 'file2.xlsx', 'file1.xlsx') #change file names to your file names.
 
-print("\nLoading Folder2 data...")
-df_folder2 = optimized_read_folder(PATHS['folder2'])
+# 3. Output Results (Optional)
+if folder1_data is not None:
+    folder1_data.to_csv('merged_folder1_data.csv', index=False)
+if folder2_data is not None:
+    folder2_data.to_csv('merged_folder2_data.csv', index=False)
+if user_data is not None:
+    user_data.to_csv('final_output.csv', index=False)
 
-print("\nLoading User IDs...")
-user_ids = pd.read_excel(PATHS['file3'], usecols=['user_id'], dtype={'user_id': 'category'})
-
-# Memory-efficient merge
-print("\nMerging datasets...")
-merged = pd.merge(
-    df_folder1[['k2']],
-    df_folder2[['key1', 'user_name']],
-    left_on='k2',
-    right_on='key1',
-    how='inner',
-    validate='one_to_one'  # Ensure expected relationship
-).drop_duplicates()
-
-# Final filtering
-print("Filtering results...")
-final_output = merged[merged['key1'].isin(user_ids['user_id'])][['k2', 'user_name']]
-
-# Save memory by converting to optimal types
-final_output = final_output.astype({
-    'k2': 'category',
-    'user_name': 'category'
-})
-
-print("\nFinal output preview:")
-print(final_output.head())
-
-# To save efficiently
-final_output.to_parquet('final_output.parquet')  # More efficient than CSV
+print("Processing complete.")
