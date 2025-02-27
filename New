@@ -84,16 +84,18 @@ def process_folder(folder_path, table_name):
                     if "SQL" in sheet_name:
                         continue
                     sheet = wb[sheet_name]
-                    print(f"Processing sheet '{sheet_name}' in {file_path}")
+                    reported_max_row = sheet.max_row if sheet.max_row else "Unknown"
+                    print(f"Processing sheet '{sheet_name}' in {file_path}: sheet.max_row = {reported_max_row}")
                     row_count = 0
                     data_seen = False
                     
-                    for i, row in enumerate(sheet.rows, start=1):
+                    # Use iter_rows to scan all rows up to max_row or a reasonable limit
+                    for row in sheet.iter_rows(min_row=1, max_row=sheet.max_row or 10000):
                         row_count += 1
                         values = [cell.value for cell in row]
-                        if i == 1 and sheet_name == wb.sheetnames[0]:  # Skip header row of first sheet
+                        if row_count == 1 and sheet_name == wb.sheetnames[0]:  # Skip header row of first sheet
                             continue
-                        if any(v is not None for v in values):  # Check if row has data
+                        if any(v is not None for v in values):
                             data_seen = True
                             if row_count <= 5:  # Print first few data rows
                                 print(f"Data row {row_count} in {sheet_name}: {values}")
@@ -160,27 +162,4 @@ if headers1 and headers2:
     ON t1."key_column1" = t2."key_column2"
     WHERE t1."user_id" IN ({','.join(['?' for _ in user_ids])})
     """
-    try:
-        cursor.execute(query, user_ids)
-        conn.commit()
-        print("Join and filter completed.")
-    except sqlite3.OperationalError as e:
-        print(f"Error during JOIN: {e}")
-        print("Check if 'key_column1', 'key_column2', and 'user_id' match the headers above.")
-else:
-    print("Skipping JOIN due to missing headers in one or both tables.")
-
-# Export result to CSV if successful
-try:
-    cursor.execute("SELECT * FROM merged_result")
-    with open("merged_filtered_result.csv", "w", encoding="utf-8") as f:
-        headers = [desc[0] for desc in cursor.description]
-        f.write(",".join(headers) + "\n")
-        for row in cursor:
-            f.write(",".join([str(val or "") for val in row]) + "\n")
-    print("Result saved to 'merged_filtered_result.csv'.")
-except sqlite3.OperationalError:
-    print("No merged_result table to export - JOIN may have failed.")
-
-# Clean up
-conn.close()
+    try
