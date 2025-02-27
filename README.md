@@ -1,12 +1,1 @@
-# git_test
-
-In a professional email, you can rephrase it as follows:
-
-"Dear [Recipient's Name],
-
-I hope this email finds you well. I am reaching out regarding [your query or topic]. While I believe you might be the appropriate contact, I wanted to kindly inquire if you could confirm or direct me to the right person to address this matter, if you are not the appropriate point of contact.
-
-Thank you for your assistance.
-
-Best regards,
-[Your Name]"
+Two folders both contain multiple-tab excel files - merge all tabs from files under each folder to 2 dataset and excluding tabs with name contain ‘SQL’ - there is another file contains user id - what file 2 contain user name and key1 , file 1 contains k2 - output k2=k1 and user name in list of user id from file3
