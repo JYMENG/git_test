@@ -1,7 +1,6 @@
 import os
 import sqlite3
 import pandas as pd
-from openpyxl import load_workbook
 
 # Define folders and file paths
 folder1 = "path/to/folder1"
@@ -17,7 +16,7 @@ def debug(msg):
     print(f"[DEBUG] {msg}")
 
 def read_excel_sheets(folder, table_name):
-    """Reads all Excel sheets from files in a folder, excluding tabs with 'SQL' in the name."""
+    """Reads all Excel sheets from files in a folder, excluding sheets with 'SQL' in the name."""
     all_data = []
     
     for file in os.listdir(folder):
@@ -25,18 +24,18 @@ def read_excel_sheets(folder, table_name):
         if file.endswith(".xlsx") or file.endswith(".xls"):
             debug(f"Reading file: {file}")
             try:
-                wb = load_workbook(file_path, data_only=True)
-                for sheet in wb.sheetnames:
-                    if "SQL" in sheet:
-                        debug(f"Skipping sheet '{sheet}' in {file} (contains 'SQL')")
+                sheets = pd.read_excel(file_path, sheet_name=None, engine="openpyxl")  # Load all sheets
+                
+                for sheet_name, df in sheets.items():
+                    if "SQL" in sheet_name:
+                        debug(f"Skipping sheet '{sheet_name}' in {file} (contains 'SQL')")
                         continue
 
-                    df = pd.DataFrame(wb[sheet].values)
                     if not df.empty:
                         df["source_file"] = file
-                        df["source_sheet"] = sheet
+                        df["source_sheet"] = sheet_name
                         all_data.append(df)
-                        debug(f"Loaded sheet '{sheet}' from {file}, rows: {len(df)}")
+                        debug(f"Loaded sheet '{sheet_name}' from {file}, rows: {len(df)}")
             except Exception as e:
                 debug(f"Error reading {file}: {e}")
     
@@ -53,7 +52,7 @@ read_excel_sheets(folder2, "table2")
 
 # Load user file
 try:
-    user_df = pd.read_excel(user_file, sheet_name=None)
+    user_df = pd.read_excel(user_file, sheet_name=None, engine="openpyxl")
     user_data = None
     for sheet_name, df in user_df.items():
         if not df.empty:
