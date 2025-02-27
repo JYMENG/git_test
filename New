@@ -36,7 +36,9 @@ def create_table_from_headers(file_path, table_name):
             print(f"Warning: No headers found in {file_path} for {table_name}")
             return None
         
-        print(f"Creating {table_name} with headers: {headers}")
+        # Print headers right after creation
+        print(f"Headers for {table_name} from {file_path}: {headers}")
+        
         columns = ", ".join([f'"{h}" TEXT' for h in headers])
         cursor.execute(f"CREATE TABLE IF NOT EXISTS {table_name} ({columns})")
         return headers
@@ -69,7 +71,6 @@ def process_folder(folder_path, table_name):
                         if i == 0 and sheet_name == wb.sheetnames[0]:  # Skip header row of first sheet
                             continue
                         values = [cell.value for cell in row]
-                        # Ensure values match header length
                         if len(values) < len(headers):
                             values.extend([None] * (len(headers) - len(values)))
                         elif len(values) > len(headers):
