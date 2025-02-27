@@ -24,21 +24,29 @@ def create_table_from_headers(file_path, table_name):
         wb = openpyxl.load_workbook(file_path, read_only=True)
         first_sheet = wb.sheetnames[0]
         sheet = wb[first_sheet]
-        # Get headers from first row, include all cells (even empty ones) based on max_column
-        headers = []
+        
+        # Get the first row and determine max columns
         first_row = next(sheet.rows)
-        for i, cell in enumerate(first_row):
-            header = cell.value if cell.value is not None else f"column_{i+1}"
-            headers.append(str(header))
+        max_cols = sheet.max_column if sheet.max_column else len([cell for cell in first_row if cell.value is not None])
+        headers = []
+        
+        # Debug: Print raw row data
+        raw_row = [cell.value for cell in first_row]
+        print(f"Raw first row for {table_name} from {file_path}: {raw_row}")
+        
+        # Build headers based on max_cols
+        for i in range(max_cols):
+            cell = first_row[i] if i < len(first_row) else None
+            header = str(cell.value) if cell and cell.value is not None else f"column_{i+1}"
+            headers.append(header)
+        
         wb.close()
         
         if not headers:
             print(f"Warning: No headers found in {file_path} for {table_name}")
             return None
         
-        # Print headers right after creation
         print(f"Headers for {table_name} from {file_path}: {headers}")
-        
         columns = ", ".join([f'"{h}" TEXT' for h in headers])
         cursor.execute(f"CREATE TABLE IF NOT EXISTS {table_name} ({columns})")
         return headers
