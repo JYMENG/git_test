@@ -21,7 +21,8 @@ cursor = conn.cursor()
 # Function to create table dynamically based on first sheet headers
 def create_table_from_headers(file_path, table_name):
     try:
-        wb = openpyxl.load_workbook(file_path, read_only=True)
+        # Use non-read-only mode to avoid XML metadata issues
+        wb = openpyxl.load_workbook(file_path, read_only=False)
         first_sheet = wb.sheetnames[0]
         sheet = wb[first_sheet]
         
@@ -72,7 +73,7 @@ def process_folder(folder_path, table_name):
         if filename.endswith(".xlsx"):
             file_path = os.path.join(folder_path, filename)
             try:
-                wb = openpyxl.load_workbook(file_path, read_only=True)
+                wb = openpyxl.load_workbook(file_path, read_only=False)
                 
                 if not headers:
                     headers = create_table_from_headers(file_path, table_name)
@@ -89,25 +90,31 @@ def process_folder(folder_path, table_name):
                     row_count = 0
                     data_seen = False
                     
-                    # Use iter_rows to scan all rows up to max_row or a reasonable limit
-                    for row in sheet.iter_rows(min_row=1, max_row=sheet.max_row or 10000):
+                    # Scan up to 10000 rows, ignoring max_row
+                    max_rows_to_check = 10000
+                    for row_idx in range(1, max_rows_to_check + 1):
                         row_count += 1
-                        values = [cell.value for cell in row]
+                        values = [sheet.cell(row=row_idx, column=col).value for col in range(1, len(headers) + 1)]
                         if row_count == 1 and sheet_name == wb.sheetnames[0]:  # Skip header row of first sheet
                             continue
                         if any(v is not None for v in values):
                             data_seen = True
                             if row_count <= 5:  # Print first few data rows
-                                print(f"Data row {row_count} in {sheet_name}: {values}")
+                                print(f"Data row {row_idx} in {sheet_name}: {values}")
                         
                         if len(values) < len(headers):
                             values.extend([None] * (len(headers) - len(values)))
                         elif len(values) > len(headers):
-                            print(f"Warning: {file_path} sheet '{sheet_name}' has {len(values)} columns, but headers expect {len(headers)}. Truncating.")
+                            print(f"Warning: {file_path} sheet '{sheet_name}' row {row_idx} has {len(values)} columns, but headers expect {len(headers)}. Truncating.")
                             values = values[:len(headers)]
                         placeholders = ",".join(["?" for _ in headers])
                         cursor.execute(f"INSERT INTO {table_name} VALUES ({placeholders})", values)
                         rows_inserted += 1
+                        # Stop if we hit 10 empty rows after seeing data
+                        if row_idx > 5 and all(v is None for v in values):
+                            next_rows = [sheet.cell(row=r, column=1).value for r in range(row_idx + 1, row_idx + 11)]
+                            if all(v is None for v in next_rows):
+                                break
                     
                     print(f"Sheet '{sheet_name}' total rows scanned: {row_count}, data seen: {data_seen}")
                 wb.close()
@@ -144,7 +151,7 @@ inspect_table("table2", headers2)
 
 # Load user IDs incrementally
 try:
-    wb = openpyxl.load_workbook(user_id_file, read_only=True)
+    wb = openpyxl.load_workbook(user_id_file, read_only=False)
     sheet = wb[wb.sheetnames[0]]
     user_ids = [row[0].value for row in sheet.rows if row[0].value]
     wb.close()
@@ -162,4 +169,27 @@ if headers1 and headers2:
     ON t1."key_column1" = t2."key_column2"
     WHERE t1."user_id" IN ({','.join(['?' for _ in user_ids])})
     """
-    try
+    try:
+        cursor.execute(query, user_ids)
+        conn.commit()
+        print("Join and filter completed.")
+    except sqlite3.OperationalError as e:
+        print(f"Error during JOIN: {e}")
+        print("Check if 'key_column1', 'key_column2', and 'user_id' match the headers above.")
+else:
+    print("Skipping JOIN due to missing headers in one or both tables.")
+
+# Export result to CSV if successful
+try:
+    cursor.execute("SELECT * FROM merged_result")
+    with open("merged_filtered_result.csv", "w", encoding="utf-8") as f:
+        headers = [desc[0] for desc in cursor.description]
+        f.write(",".join(headers) + "\n")
+        for row in cursor:
+            f.write(",".join([str(val or "") for val in row]) + "\n")
+    print("Result saved to 'merged_filtered_result.csv'.")
+except sqlite3.OperationalError:
+    print("No merged_result table to export - JOIN may have failed.")
+
+# Clean up
+conn.close()
