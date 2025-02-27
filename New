@@ -39,8 +39,22 @@ def process_folder(folder_path, table_name):
                     
                     sheet = excel_file.load_sheet(sheet_name)
                     print(f"Processing sheet '{sheet_name}' in {file_path}")
+                    print(f"Sheet object type: {type(sheet)}")
+                    print(f"Sheet object attributes: {dir(sheet)}")  # Debug available methods
                     
-                    for i, row in enumerate(sheet.to_record()):
+                    # Try iterating directly over sheet or use a fallback method
+                    try:
+                        # Attempt direct iteration (if sheet is iterable)
+                        rows = iter(sheet)
+                    except TypeError:
+                        # Fallback to to_list() or similar if available
+                        if hasattr(sheet, 'to_list'):
+                            rows = sheet.to_list()
+                        else:
+                            print(f"Error: No known method to access rows in {sheet_name}")
+                            continue
+                    
+                    for i, row in enumerate(rows):
                         if not isinstance(row, (list, tuple)):
                             print(f"Error: Row {i} in {sheet_name} is not a sequence: {row}")
                             continue
@@ -58,7 +72,6 @@ def process_folder(folder_path, table_name):
                                         print(f"Warning: 'user_id' not found in headers for {table_name}")
                             continue
                         
-                        # Convert all values to strings manually
                         try:
                             values = [str(val) if val is not None else None for val in row]
                         except Exception as e:
@@ -101,8 +114,20 @@ try:
     
     sheet_name = excel_file.sheet_names[0]
     sheet = excel_file.load_sheet(sheet_name)
+    print(f"User ID sheet object type: {type(sheet)}")
+    print(f"User ID sheet object attributes: {dir(sheet)}")
+    
+    try:
+        rows = iter(sheet)
+    except TypeError:
+        if hasattr(sheet, 'to_list'):
+            rows = sheet.to_list()
+        else:
+            print(f"Error: No known method to access rows in {sheet_name} of {user_id_file}")
+            rows = []
+    
     user_ids = []
-    for row in sheet.to_record():
+    for row in rows:
         if not isinstance(row, (list, tuple)):
             print(f"Error: Row in {user_id_file} is not a sequence: {row}")
             continue
