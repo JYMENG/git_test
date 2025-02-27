@@ -25,20 +25,36 @@ def create_table_from_headers(file_path, table_name):
         first_sheet = wb.sheetnames[0]
         sheet = wb[first_sheet]
         
-        # Get the first row and determine max columns
-        first_row = next(sheet.rows)
-        max_cols = sheet.max_column if sheet.max_column else len([cell for cell in first_row if cell.value is not None])
+        # Log max_column and max_row for debugging
+        reported_max_col = sheet.max_column if sheet.max_column else "Unknown"
+        print(f"{table_name} from {file_path}: sheet.max_column = {reported_max_col}")
+        
+        # Scan up to a reasonable limit (e.g., 100 columns) or Excel's max (16384)
         headers = []
+        max_cols_to_check = 100  # Adjust this if you expect more columns
+        raw_row = []
         
-        # Debug: Print raw row data
-        raw_row = [cell.value for cell in first_row]
+        for col_idx in range(1, max_cols_to_check + 1):
+            cell = sheet.cell(row=1, column=col_idx)
+            value = cell.value
+            raw_row.append(value)
+            if value is not None:
+                headers.append(str(value))
+            else:
+                # Include empty columns up to the last non-empty one
+                headers.append(f"column_{col_idx}")
+                # Check if we've hit the end of meaningful data
+                next_values = [sheet.cell(row=1, column=c).value for c in range(col_idx + 1, col_idx + 5)]
+                if all(v is None for v in next_values):
+                    break
+        
+        # Trim headers to last non-placeholder if trailing empties
+        while headers and headers[-1].startswith("column_") and raw_row[-1] is None:
+            headers.pop()
+            raw_row.pop()
+        
         print(f"Raw first row for {table_name} from {file_path}: {raw_row}")
-        
-        # Build headers based on max_cols
-        for i in range(max_cols):
-            cell = first_row[i] if i < len(first_row) else None
-            header = str(cell.value) if cell and cell.value is not None else f"column_{i+1}"
-            headers.append(header)
+        print(f"Headers for {table_name} from {file_path}: {headers}")
         
         wb.close()
         
@@ -46,7 +62,6 @@ def create_table_from_headers(file_path, table_name):
             print(f"Warning: No headers found in {file_path} for {table_name}")
             return None
         
-        print(f"Headers for {table_name} from {file_path}: {headers}")
         columns = ", ".join([f'"{h}" TEXT' for h in headers])
         cursor.execute(f"CREATE TABLE IF NOT EXISTS {table_name} ({columns})")
         return headers
@@ -75,8 +90,8 @@ def process_folder(folder_path, table_name):
                     if "SQL" in sheet_name:
                         continue
                     sheet = wb[sheet_name]
-                    for i, row in enumerate(sheet.rows):
-                        if i == 0 and sheet_name == wb.sheetnames[0]:  # Skip header row of first sheet
+                    for i, row in enumerate(sheet.rows, start=1):
+                        if i == 1 and sheet_name == wb.sheetnames[0]:  # Skip header row of first sheet
                             continue
                         values = [cell.value for cell in row]
                         if len(values) < len(headers):
