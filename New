@@ -1,61 +1,66 @@
-import os
+import sqlite3
+import csv
 import pandas as pd
 
-# Configuration
-input_folder = "path_to_your_folder"  # Change to your folder path
-output_csv = "merged_output.csv"
-batch_size = 50_000  # Process in chunks
+# Step 1: Load the list of users from the Excel file
+print("Loading user list from Excel file...")
+user_list_df = pd.read_excel('user_list.xlsx')  # Replace with your actual Excel file path
+user_list = set(user_list_df['user'].tolist())  # Use a set for fast membership testing
+print(f"User list loaded. Total {len(user_list)} users.")
 
-# Debug: Start process
-print(f"Scanning folder: {input_folder}")
+# Step 2: Create SQLite connection
+print("Creating SQLite database connection...")
+conn = sqlite3.connect('data.db')  # In-memory database or a file-based database
+cursor = conn.cursor()
 
-# Get all `.xlsx` files in the folder
-excel_files = [f for f in os.listdir(input_folder) if f.endswith(".xlsx")]
-print(f"Found {len(excel_files)} Excel files.")
+# Step 3: Read the CSV file to dynamically create the table schema based on headers
+print("Reading CSV file and creating table schema...")
+with open('large_data.csv', 'r', newline='', encoding='utf-8') as input_file:
+    csv_reader = csv.DictReader(input_file)
+    headers = csv_reader.fieldnames  # Get the headers from the CSV file
+    
+    # Debug: Print the headers
+    print(f"CSV Headers: {headers}")
 
-header_saved = False  # Ensures only the first tab of the first file has a header
-total_rows = 0  # Track total rows processed
+    # Dynamically create the CREATE TABLE SQL command with all columns as TEXT
+    create_table_query = f"CREATE TABLE IF NOT EXISTS large_data ({', '.join([f'{header} TEXT' for header in headers])})"
+    print(f"Creating table with query: {create_table_query}")
+    
+    # Create the table in SQLite
+    cursor.execute(create_table_query)
+    print("Table created (or already exists).")
 
-for file_idx, file in enumerate(excel_files):
-    file_path = os.path.join(input_folder, file)
-    print(f"\nProcessing file: {file}")
+    # Step 4: Insert data into the table, treating all columns as TEXT
+    print("Inserting data into SQLite table...")
+    rows = [tuple(row.values()) for row in csv_reader]  # Convert rows into tuples
+    
+    # Debug: Check the number of rows to insert
+    print(f"Total rows to insert: {len(rows)}")
+    
+    cursor.executemany(f"INSERT INTO large_data ({', '.join(headers)}) VALUES ({', '.join(['?'] * len(headers))})", rows)
+    conn.commit()
+    print("Data inserted into SQLite table successfully.")
 
-    try:
-        # Read all sheet names
-        xls = pd.ExcelFile(file_path)
-        sheets = xls.sheet_names
-        print(f"  Found {len(sheets)} sheets: {sheets}")
+# Step 5: Query the database to filter by the user list
+print("Querying database to filter rows by user list...")
+query = f"SELECT * FROM large_data WHERE user IN ({','.join('?' for _ in user_list)})"
+cursor.execute(query, tuple(user_list))
 
-        for sheet_idx, sheet in enumerate(sheets):
-            if "SQL" in sheet:  # Skip sheets containing "SQL"
-                print(f"  Skipping sheet (contains 'SQL'): {sheet}")
-                continue
+# Debug: Show the number of rows matching the user filter
+filtered_rows = cursor.fetchall()
+print(f"Total filtered rows: {len(filtered_rows)}")
 
-            print(f"  Reading sheet: {sheet}")
+# Step 6: Export the filtered data to a new CSV file
+print("Exporting filtered data to 'filtered_data.csv'...")
+with open('filtered_data.csv', 'w', newline='', encoding='utf-8') as output_file:
+    csv_writer = csv.writer(output_file)
+    csv_writer.writerow(headers)  # Write header
+    csv_writer.writerows(filtered_rows)
 
-            # Read in chunks
-            chunk_iter = pd.read_excel(file_path, sheet_name=sheet, dtype=str, chunksize=batch_size)
+print("Filtered data exported successfully to 'filtered_data.csv'.")
 
-            for df in chunk_iter:
-                # Add metadata columns
-                df.insert(0, "File_Name", file)
-                df.insert(1, "Sheet_Name", sheet)
-                df.insert(2, "Row_Number", range(1, len(df) + 1))
+# Close the database connection
+conn.close()
+print("SQLite connection closed.")
 
-                # Determine if header should be written
-                write_header = not header_saved and sheet_idx == 0 and file_idx == 0
-
-                # Save to CSV in append mode
-                df.to_csv(output_csv, sep="|", index=False, quoting=1, mode="a", header=write_header)
-                
-                if write_header:
-                    header_saved = True  # Ensure future writes do not include headers
-
-                total_rows += len(df)
-                print(f"    Processed {total_rows} rows so far...")
-
-    except Exception as e:
-        print(f"  ERROR processing file {file}: {e}")
-
-print(f"\nFinal merged row count: {total_rows}")
-print(f"Merged file saved as {output_csv}")
+print("Filtering complete.")
