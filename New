@@ -1,38 +1,61 @@
 import sqlite3
+import pandas as pd
+
+# File paths
+file_q = "C:/path/to/file_q.csv"
+file_w = "C:/path/to/file_w.csv"
+sqlite_db = "C:/path/to/database.db"
 
 # Connect to SQLite database
-db_path = "C:/YourSQLiteDatabase.db"
-conn = sqlite3.connect(db_path)
+conn = sqlite3.connect(sqlite_db)
 cursor = conn.cursor()
 
-# Function to get column name by index
-def get_column_name(table, index):
-    cursor.execute(f"PRAGMA table_info({table})")
-    columns = [row[1] for row in cursor.fetchall()]  # Get all column names
-    return columns[index] if index < len(columns) else None  # Return column name or None
+# Function to dynamically create table based on CSV headers
+def create_table_from_csv(file_path, table_name):
+    # Read the first row of the CSV to get column names
+    df = pd.read_csv(file_path, nrows=1)  # Read only the first row for header
+    columns = df.columns.tolist()
+    
+    # Create a table schema
+    columns_schema = ', '.join([f"{col} TEXT" for col in columns])
+    
+    # Create the table dynamically
+    create_table_query = f"CREATE TABLE IF NOT EXISTS {table_name} ({columns_schema});"
+    cursor.execute(create_table_query)
+    print(f"Table {table_name} created with columns: {columns}")
 
-# Define tables and column indexes
-table1, table2 = "Table1", "Table2"
-col_index_1, col_index_2 = 2, 3  # Example: Compare Table1 column[2] with Table2 column[3]
+# Create table for file_q
+create_table_from_csv(file_q, "file_q")
 
-# Get actual column names
-col_name_1 = get_column_name(table1, col_index_1)
-col_name_2 = get_column_name(table2, col_index_2)
+# Create table for file_w
+create_table_from_csv(file_w, "file_w")
 
-if col_name_1 and col_name_2:
-    # Construct query dynamically
-    query = f"""
-    SELECT {table1}.{col_name_1}, {table2}.{col_name_2} 
-    FROM {table1}
-    JOIN {table2} ON {table1}.{col_name_1} = {table2}.{col_name_2}
-    """
-    cursor.execute(query)
+# Read full CSV files and insert into tables
+df_q = pd.read_csv(file_q)
+df_w = pd.read_csv(file_w)
 
-    # Fetch results
-    rows = cursor.fetchall()
-    for row in rows:
-        print(row)
-else:
-    print("Invalid column index!")
+df_q.to_sql('file_q', conn, if_exists='replace', index=False)
+df_w.to_sql('file_w', conn, if_exists='replace', index=False)
 
+# Perform inner join and convert datetime column
+query = '''
+SELECT f1.key1, f1.column1, f1.column2, 
+       f2.key2, f2.columnA, f2.columnB, 
+       datetime(f2.datetime_col) as datetime_col
+FROM file_q f1
+INNER JOIN file_w f2
+ON f1.key1 = f2.key2
+ORDER BY f1.key1 DESC, datetime(f2.datetime_col) ASC;
+'''
+
+# Execute the query and fetch results
+result = pd.read_sql_query(query, conn)
+
+# Save the result to CSV
+output_file = "C:/path/to/output.csv"
+result.to_csv(output_file, index=False)
+
+print("Merge and export complete. Output saved at:", output_file)
+
+# Close SQLite connection
 conn.close()
