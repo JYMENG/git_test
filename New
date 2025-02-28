@@ -1,31 +1,29 @@
-import os
-import pandas as pd
-from glob import glob
+=import os
+import polars as pl
 
 # Configuration
-input_folder = "path_to_your_folder"  # Change this to your folder path
+input_folder = "path_to_your_folder"  # Change to your folder path
 output_csv = "merged_output.csv"
+batch_size = 50_000  # Process 50,000 rows at a time
 
 # Debug: Start process
 print(f"Scanning folder: {input_folder}")
 
-# Find all Excel files
-excel_files = glob(os.path.join(input_folder, "*.xlsx"))
+# Get all `.xlsx` files in the folder
+excel_files = [f for f in os.listdir(input_folder) if f.endswith(".xlsx")]
 print(f"Found {len(excel_files)} Excel files.")
 
-# Storage for merged data
-merged_data = []
 header_saved = False  # Track if header has been written
 total_rows = 0  # Track total rows processed
 
 for file in excel_files:
-    file_name = os.path.basename(file)  # Get only file name
-    print(f"\nProcessing file: {file_name}")
+    file_path = os.path.join(input_folder, file)
+    print(f"\nProcessing file: {file}")
 
     try:
-        # Read Excel file sheet names
-        xls = pd.ExcelFile(file)
-        sheets = xls.sheet_names
+        # Read all sheet names first
+        xls = pl.read_excel(file_path, sheet_id=0, metadata=True)
+        sheets = xls["sheets"]
         print(f"  Found {len(sheets)} sheets: {sheets}")
 
         for sheet in sheets:
@@ -35,46 +33,25 @@ for file in excel_files:
 
             print(f"  Reading sheet: {sheet}")
 
-            try:
-                # Read sheet as string
-                df = pd.read_excel(xls, sheet_name=sheet, dtype=str)
-                row_count = len(df)
-                print(f"    Loaded {row_count} rows from {sheet}")
+            # Read in batches
+            df_iter = pl.read_excel(file_path, sheet_name=sheet, dtype=str, chunk_size=batch_size)
 
-                if row_count == 0:
-                    print(f"    Skipping empty sheet: {sheet}")
-                    continue
-
+            for df in df_iter:
                 # Add metadata columns
-                df.insert(0, "File_Name", file_name)
-                df.insert(1, "Sheet_Name", sheet)
-                df.insert(2, "Row_Number", range(1, row_count + 1))
+                df = df.with_columns([
+                    pl.lit(file).alias("File_Name"),
+                    pl.lit(sheet).alias("Sheet_Name"),
+                    pl.arange(1, df.height + 1).alias("Row_Number")
+                ])
 
-                # Append data
-                if not header_saved:
-                    merged_data.append(df)  # Include headers for first sheet
-                    header_saved = True
-                    print("    Header included from first sheet.")
-                else:
-                    merged_data.append(df.iloc[:, :])  # Append without headers
-                    print("    Appended data without header.")
-
-                total_rows += row_count
-
-            except Exception as e:
-                print(f"    ERROR reading sheet {sheet}: {e}")
+                # Save to CSV in append mode
+                df.write_csv(output_csv, separator="|", include_header=not header_saved, append=True)
+                header_saved = True
+                total_rows += df.height
+                print(f"    Processed {total_rows} rows so far...")
 
     except Exception as e:
-        print(f"  ERROR opening file {file_name}: {e}")
+        print(f"  ERROR processing file {file}: {e}")
 
-# Merge all data
-if merged_data:
-    final_df = pd.concat(merged_data, ignore_index=True)
-    print(f"\nFinal merged row count: {total_rows}")
-    
-    # Save as CSV with `|` delimiter and quoted strings
-    final_df.to_csv(output_csv, sep="|", index=False, quoting=1)  # quoting=1 for quoting all fields
-
-    print(f"Merged file saved as {output_csv}")
-else:
-    print("\nNo valid data to merge. Exiting without saving.")
+print(f"\nFinal merged row count: {total_rows}")
+print(f"Merged file saved as {output_csv}")
