@@ -1,81 +1,46 @@
-import sqlite3
 import csv
 from datetime import datetime
 
-# File paths
-file_q = "C:/path/to/file_q.csv"
-file_w = "C:/path/to/file_w.csv"
-sqlite_db = "C:/path/to/database.db"
-output_file = "C:/path/to/output.csv"
+# Define the input and output CSV file paths
+input_file = 'input.csv'
+output_file = 'output.csv'
 
-# Connect to SQLite database
-conn = sqlite3.connect(sqlite_db)
-cursor = conn.cursor()
+# Define the input datetime format (dd-mmm-yy hh.mm.ss.123456789 AM/PM)
+input_format = '%d-%b-%y %I.%M.%S.%f %p'
 
-# Function to create SQLite table from CSV header
-def create_table_from_csv(file_path, table_name):
-    # Read the first row of the CSV to get column names
-    with open(file_path, 'r', newline='', encoding='utf-8') as f:
-        reader = csv.reader(f)
-        columns = next(reader)  # Get the header
-        
-    # Create a table schema dynamically
-    columns_schema = ', '.join([f"{col} TEXT" for col in columns])
+# Define the output datetime format (YYYY-MM-DD HH:MM:SS)
+output_format = '%Y-%m-%d %H:%M:%S'
+
+# Open the input CSV file for reading and the output file for writing
+with open(input_file, 'r', newline='', encoding='utf-8') as infile, \
+     open(output_file, 'w', newline='', encoding='utf-8') as outfile:
+
+    # Create CSV reader and writer
+    reader = csv.DictReader(infile)
+    fieldnames = reader.fieldnames  # Get the header (field names)
+    writer = csv.DictWriter(outfile, fieldnames=fieldnames)
     
-    # Create table query
-    create_table_query = f"CREATE TABLE IF NOT EXISTS {table_name} ({columns_schema});"
-    cursor.execute(create_table_query)
-    print(f"Table {table_name} created with columns: {columns}")
+    # Write the header to the output CSV
+    writer.writeheader()
 
-# Create tables for file_q and file_w
-create_table_from_csv(file_q, "file_q")
-create_table_from_csv(file_w, "file_w")
+    # Process each row in the CSV
+    for row in reader:
+        # Get the original datetime string
+        original_datetime = row['date_column']  # Replace 'date_column' with your actual column name
 
-# Function to insert data into SQLite from CSV
-def insert_data_into_table(file_path, table_name):
-    with open(file_path, 'r', newline='', encoding='utf-8') as f:
-        reader = csv.reader(f)
-        columns = next(reader)  # Get the header
-        
-        # Insert data row by row
-        for row in reader:
-            placeholders = ', '.join(['?'] * len(row))  # Dynamically create placeholders for values
-            insert_query = f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders})"
-            cursor.execute(insert_query, row)
-    conn.commit()
-    print(f"Data from {file_path} inserted into {table_name}")
+        # Parse the original datetime string to a datetime object
+        try:
+            parsed_datetime = datetime.strptime(original_datetime, input_format)
+            # Convert the datetime object to the desired format
+            formatted_datetime = parsed_datetime.strftime(output_format)
 
-# Insert data into SQLite tables
-insert_data_into_table(file_q, "file_q")
-insert_data_into_table(file_w, "file_w")
+            # Update the row with the converted datetime
+            row['date_column'] = formatted_datetime
 
-# Perform inner join and convert datetime column
-query = '''
-SELECT f1.key1, f1.column1, f1.column2, 
-       f2.key2, f2.columnA, f2.columnB, 
-       datetime(f2.datetime_col) as datetime_col
-FROM file_q f1
-INNER JOIN file_w f2
-ON f1.key1 = f2.key2
-ORDER BY f1.key1 DESC, datetime(f2.datetime_col) ASC;
-'''
+        except ValueError as e:
+            print(f"Error parsing datetime for row: {row}, error: {e}")
 
-# Execute the query and fetch results
-cursor.execute(query)
-rows = cursor.fetchall()
+        # Write the updated row to the output CSV
+        writer.writerow(row)
 
-# Write the result to output CSV
-with open(output_file, 'w', newline='', encoding='utf-8') as f:
-    writer = csv.writer(f)
-    
-    # Write the header (columns)
-    header = ["key1", "column1", "column2", "key2", "columnA", "columnB", "datetime_col"]
-    writer.writerow(header)
-    
-    # Write the data rows
-    writer.writerows(rows)
-
-print("Merge and export complete. Output saved at:", output_file)
-
-# Close SQLite connection
-conn.close()
+print(f"Processed file saved as {output_file}")
