@@ -1,10 +1,10 @@
 import os
-import polars as pl
+import pandas as pd
 
 # Configuration
 input_folder = "path_to_your_folder"  # Change to your folder path
 output_csv = "merged_output.csv"
-batch_size = 50_000  # Process 50,000 rows at a time
+batch_size = 50_000  # Process in chunks to avoid memory overload
 
 # Debug: Start process
 print(f"Scanning folder: {input_folder}")
@@ -21,9 +21,9 @@ for file in excel_files:
     print(f"\nProcessing file: {file}")
 
     try:
-        # Get sheet names (Alternative method)
-        with pl.ExcelReader(file_path) as reader:
-            sheets = reader.sheet_names
+        # Read all sheet names
+        xls = pd.ExcelFile(file_path)
+        sheets = xls.sheet_names
         print(f"  Found {len(sheets)} sheets: {sheets}")
 
         for sheet in sheets:
@@ -34,20 +34,18 @@ for file in excel_files:
             print(f"  Reading sheet: {sheet}")
 
             # Read in chunks
-            df_iter = pl.read_excel(file_path, sheet_name=sheet, dtype=str, batch_size=batch_size)
+            chunk_iter = pd.read_excel(file_path, sheet_name=sheet, dtype=str, chunksize=batch_size)
 
-            for df in df_iter:
+            for df in chunk_iter:
                 # Add metadata columns
-                df = df.with_columns([
-                    pl.lit(file).alias("File_Name"),
-                    pl.lit(sheet).alias("Sheet_Name"),
-                    pl.arange(1, df.height + 1).alias("Row_Number")
-                ])
+                df.insert(0, "File_Name", file)
+                df.insert(1, "Sheet_Name", sheet)
+                df.insert(2, "Row_Number", range(1, len(df) + 1))
 
                 # Save to CSV in append mode
-                df.write_csv(output_csv, separator="|", include_header=not header_saved, append=True)
+                df.to_csv(output_csv, sep="|", index=False, quoting=1, mode="a", header=not header_saved)
                 header_saved = True
-                total_rows += df.height
+                total_rows += len(df)
                 print(f"    Processed {total_rows} rows so far...")
 
     except Exception as e:
