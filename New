@@ -1,41 +1,53 @@
 import sqlite3
-import pandas as pd
+import csv
+from datetime import datetime
 
 # File paths
 file_q = "C:/path/to/file_q.csv"
 file_w = "C:/path/to/file_w.csv"
 sqlite_db = "C:/path/to/database.db"
+output_file = "C:/path/to/output.csv"
 
 # Connect to SQLite database
 conn = sqlite3.connect(sqlite_db)
 cursor = conn.cursor()
 
-# Function to dynamically create table based on CSV headers
+# Function to create SQLite table from CSV header
 def create_table_from_csv(file_path, table_name):
     # Read the first row of the CSV to get column names
-    df = pd.read_csv(file_path, nrows=1)  # Read only the first row for header
-    columns = df.columns.tolist()
-    
-    # Create a table schema
+    with open(file_path, 'r', newline='', encoding='utf-8') as f:
+        reader = csv.reader(f)
+        columns = next(reader)  # Get the header
+        
+    # Create a table schema dynamically
     columns_schema = ', '.join([f"{col} TEXT" for col in columns])
     
-    # Create the table dynamically
+    # Create table query
     create_table_query = f"CREATE TABLE IF NOT EXISTS {table_name} ({columns_schema});"
     cursor.execute(create_table_query)
     print(f"Table {table_name} created with columns: {columns}")
 
-# Create table for file_q
+# Create tables for file_q and file_w
 create_table_from_csv(file_q, "file_q")
-
-# Create table for file_w
 create_table_from_csv(file_w, "file_w")
 
-# Read full CSV files and insert into tables
-df_q = pd.read_csv(file_q)
-df_w = pd.read_csv(file_w)
+# Function to insert data into SQLite from CSV
+def insert_data_into_table(file_path, table_name):
+    with open(file_path, 'r', newline='', encoding='utf-8') as f:
+        reader = csv.reader(f)
+        columns = next(reader)  # Get the header
+        
+        # Insert data row by row
+        for row in reader:
+            placeholders = ', '.join(['?'] * len(row))  # Dynamically create placeholders for values
+            insert_query = f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders})"
+            cursor.execute(insert_query, row)
+    conn.commit()
+    print(f"Data from {file_path} inserted into {table_name}")
 
-df_q.to_sql('file_q', conn, if_exists='replace', index=False)
-df_w.to_sql('file_w', conn, if_exists='replace', index=False)
+# Insert data into SQLite tables
+insert_data_into_table(file_q, "file_q")
+insert_data_into_table(file_w, "file_w")
 
 # Perform inner join and convert datetime column
 query = '''
@@ -49,11 +61,19 @@ ORDER BY f1.key1 DESC, datetime(f2.datetime_col) ASC;
 '''
 
 # Execute the query and fetch results
-result = pd.read_sql_query(query, conn)
+cursor.execute(query)
+rows = cursor.fetchall()
 
-# Save the result to CSV
-output_file = "C:/path/to/output.csv"
-result.to_csv(output_file, index=False)
+# Write the result to output CSV
+with open(output_file, 'w', newline='', encoding='utf-8') as f:
+    writer = csv.writer(f)
+    
+    # Write the header (columns)
+    header = ["key1", "column1", "column2", "key2", "columnA", "columnB", "datetime_col"]
+    writer.writerow(header)
+    
+    # Write the data rows
+    writer.writerows(rows)
 
 print("Merge and export complete. Output saved at:", output_file)
 
