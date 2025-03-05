@@ -1,46 +1,36 @@
-import csv
-from datetime import datetime
+import os
+import pandas as pd
 
-# Define the input and output CSV file paths
-input_file = 'input.csv'
-output_file = 'output.csv'
+# Change this to your target folder
+folder_path = "path/to/your/folder"
+output_file = "merged_output.csv"
 
-# Define the input datetime format (dd-mmm-yy hh.mm.ss.123456789 AM/PM)
-input_format = '%d-%b-%y %I.%M.%S.%f %p'
+# Define chunk size based on your system's memory
+chunk_size = 100_000  
 
-# Define the output datetime format (YYYY-MM-DD HH:MM:SS)
-output_format = '%Y-%m-%d %H:%M:%S'
+# Get all CSV files in the folder
+csv_files = [f for f in os.listdir(folder_path) if f.endswith(".csv")]
 
-# Open the input CSV file for reading and the output file for writing
-with open(input_file, 'r', newline='', encoding='utf-8') as infile, \
-     open(output_file, 'w', newline='', encoding='utf-8') as outfile:
+print(f"Found {len(csv_files)} CSV files to merge.")
 
-    # Create CSV reader and writer
-    reader = csv.DictReader(infile)
-    fieldnames = reader.fieldnames  # Get the header (field names)
-    writer = csv.DictWriter(outfile, fieldnames=fieldnames)
-    
-    # Write the header to the output CSV
-    writer.writeheader()
+# Open the output file in write mode to store the merged data
+with open(output_file, "w", encoding="utf-8", newline="") as out_file:
+    first_file = True  # Track the first file for writing headers
 
-    # Process each row in the CSV
-    for row in reader:
-        # Get the original datetime string
-        original_datetime = row['date_column']  # Replace 'date_column' with your actual column name
+    for file in csv_files:
+        file_path = os.path.join(folder_path, file)
+        total_rows = 0  # Track the number of rows in each file
+        
+        print(f"Processing: {file}")
 
-        # Parse the original datetime string to a datetime object
-        try:
-            parsed_datetime = datetime.strptime(original_datetime, input_format)
-            # Convert the datetime object to the desired format
-            formatted_datetime = parsed_datetime.strftime(output_format)
+        for chunk in pd.read_csv(file_path, chunksize=chunk_size):
+            chunk["filename"] = file  # Add filename as a column
+            total_rows += len(chunk)
 
-            # Update the row with the converted datetime
-            row['date_column'] = formatted_datetime
+            # Write header only for the first file
+            chunk.to_csv(out_file, mode="a", index=False, header=first_file)
+            first_file = False  # Ensure headers are not repeated
+        
+        print(f"  -> {file}: {total_rows} rows processed.")
 
-        except ValueError as e:
-            print(f"Error parsing datetime for row: {row}, error: {e}")
-
-        # Write the updated row to the output CSV
-        writer.writerow(row)
-
-print(f"Processed file saved as {output_file}")
+print("Merging complete. Output saved to:", output_file)
