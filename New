@@ -1,20 +1,32 @@
 Option Explicit
 
 Sub ImportPDFFiles()
-    Dim ws As Worksheet
+    Dim wsList As Worksheet, wsData As Worksheet
     Dim pdfFolder As String
     Dim fileName As String
     Dim lastRow As Long
     Dim i As Long
     
-    ' Define worksheet
-    Set ws = ThisWorkbook.Sheets("PDF_List") ' Change to the correct sheet name
+    ' Define worksheets
+    Set wsList = ThisWorkbook.Sheets("PDF_List")  ' Sheet for the list of PDFs
+    Set wsData = ThisWorkbook.Sheets("PDF_Data")  ' Sheet for imported PDF data
     
-    ' Clear old list
-    ws.Cells.Clear
+    ' Clear old PDF list (Column A in "PDF_List")
+    wsList.Range("A:A").Clear
     
-    ' Set folder path (Change this to your PDF folder)
-    pdfFolder = "C:\Your\PDF\Folder\" ' Ensure it ends with a "\"
+    ' Get folder path from named cell
+    On Error Resume Next
+    pdfFolder = ThisWorkbook.Names("PDF_Folder_Path").RefersToRange.Value
+    On Error GoTo 0
+    
+    ' Validate folder path
+    If pdfFolder = "" Or Dir(pdfFolder, vbDirectory) = "" Then
+        MsgBox "Invalid or missing folder path! Check the named cell 'PDF_Folder_Path'.", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Ensure folder path ends with "\"
+    If Right(pdfFolder, 1) <> "\" Then pdfFolder = pdfFolder & "\"
     
     ' Debug message
     Debug.Print "Scanning folder: " & pdfFolder
@@ -28,38 +40,37 @@ Sub ImportPDFFiles()
         Exit Sub
     End If
     
-    ' List PDF files in sheet
+    ' List PDF files in "PDF_List"
     i = 1
     Do While fileName <> ""
-        ws.Cells(i, 1).Value = pdfFolder & fileName ' Store full path
+        wsList.Cells(i, 1).Value = pdfFolder & fileName ' Store full path in Column A
         Debug.Print "Found file: " & fileName
         i = i + 1
         fileName = Dir
     Loop
     
     ' Get last row
-    lastRow = ws.Cells(Rows.Count, 1).End(xlUp).Row
+    lastRow = wsList.Cells(Rows.Count, 1).End(xlUp).Row
+    
+    ' Clear old imported data in "PDF_Data" before importing new PDFs
+    wsData.Cells.Clear
     
     ' Process each PDF
     For i = 1 To lastRow
-        Debug.Print "Importing: " & ws.Cells(i, 1).Value
-        ImportPDF ws.Cells(i, 1).Value
+        Debug.Print "Importing: " & wsList.Cells(i, 1).Value
+        ImportPDF wsList.Cells(i, 1).Value, wsData
     Next i
     
     ' Mark completion
-    ws.Cells(lastRow + 2, 1).Value = "FINISHED"
+    wsList.Cells(lastRow + 2, 1).Value = "FINISHED"
     Debug.Print "Processing complete!"
     
     MsgBox "All PDF files have been processed!", vbInformation
 End Sub
 
-Sub ImportPDF(pdfPath As String)
+Sub ImportPDF(pdfPath As String, wsData As Worksheet)
     Dim queryName As String
-    Dim ws As Worksheet
-    Dim tableName As String
-    
-    ' Define sheet to store imported data
-    Set ws = ThisWorkbook.Sheets("PDF_Data") ' Change to your data sheet
+    Dim dataRange As Range
     
     ' Debug message
     Debug.Print "Reading PDF: " & pdfPath
@@ -70,10 +81,13 @@ Sub ImportPDF(pdfPath As String)
     ThisWorkbook.Queries(queryName).Delete
     On Error GoTo 0
     
+    ' Ensure we start in cell A1 in "PDF_Data"
+    Set dataRange = wsData.Range("A1")
+    
     ' Use Power Query to import PDF
-    With ActiveSheet.ListObjects.Add(SourceType:=0, Source:= _
+    With wsData.ListObjects.Add(SourceType:=0, Source:= _
         "OLEDB;Provider=Microsoft.Mashup.OleDb.1;Data Source=$Workbook$;Location=" & pdfPath, _
-        Destination:=ws.Range("A1"))
+        Destination:=dataRange)
         .Name = "PDFImportTable"
     End With
     
@@ -81,19 +95,16 @@ Sub ImportPDF(pdfPath As String)
     Debug.Print "PDF imported: " & pdfPath
     
     ' Call processing function
-    ProcessPDFData
-    
+    ProcessPDFData wsData
 End Sub
 
-Sub ProcessPDFData()
-    ' Add your data processing steps here
-    
+Sub ProcessPDFData(wsData As Worksheet)
     ' Debug message
     Debug.Print "Processing imported data..."
     
-    ' Example: Sort data in ascending order
+    ' Example: Sort data in ascending order (modify as needed)
     On Error Resume Next
-    ActiveSheet.Range("A1").Sort Key1:=ActiveSheet.Range("A2"), Order1:=xlAscending, Header:=xlYes
+    wsData.Range("A1").Sort Key1:=wsData.Range("A2"), Order1:=xlAscending, Header:=xlYes
     On Error GoTo 0
     
     ' Debug message
