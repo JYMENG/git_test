@@ -1,36 +1,101 @@
-import os
-import pandas as pd
+Option Explicit
 
-# Change this to your target folder
-folder_path = "path/to/your/folder"
-output_file = "merged_output.csv"
+Sub ImportPDFFiles()
+    Dim ws As Worksheet
+    Dim pdfFolder As String
+    Dim fileName As String
+    Dim lastRow As Long
+    Dim i As Long
+    
+    ' Define worksheet
+    Set ws = ThisWorkbook.Sheets("PDF_List") ' Change to the correct sheet name
+    
+    ' Clear old list
+    ws.Cells.Clear
+    
+    ' Set folder path (Change this to your PDF folder)
+    pdfFolder = "C:\Your\PDF\Folder\" ' Ensure it ends with a "\"
+    
+    ' Debug message
+    Debug.Print "Scanning folder: " & pdfFolder
+    
+    ' Get first PDF file
+    fileName = Dir(pdfFolder & "*.pdf")
+    
+    ' Check if folder contains PDFs
+    If fileName = "" Then
+        MsgBox "No PDF files found in the folder!", vbExclamation
+        Exit Sub
+    End If
+    
+    ' List PDF files in sheet
+    i = 1
+    Do While fileName <> ""
+        ws.Cells(i, 1).Value = pdfFolder & fileName ' Store full path
+        Debug.Print "Found file: " & fileName
+        i = i + 1
+        fileName = Dir
+    Loop
+    
+    ' Get last row
+    lastRow = ws.Cells(Rows.Count, 1).End(xlUp).Row
+    
+    ' Process each PDF
+    For i = 1 To lastRow
+        Debug.Print "Importing: " & ws.Cells(i, 1).Value
+        ImportPDF ws.Cells(i, 1).Value
+    Next i
+    
+    ' Mark completion
+    ws.Cells(lastRow + 2, 1).Value = "FINISHED"
+    Debug.Print "Processing complete!"
+    
+    MsgBox "All PDF files have been processed!", vbInformation
+End Sub
 
-# Define chunk size based on your system's memory
-chunk_size = 100_000  
+Sub ImportPDF(pdfPath As String)
+    Dim queryName As String
+    Dim ws As Worksheet
+    Dim tableName As String
+    
+    ' Define sheet to store imported data
+    Set ws = ThisWorkbook.Sheets("PDF_Data") ' Change to your data sheet
+    
+    ' Debug message
+    Debug.Print "Reading PDF: " & pdfPath
+    
+    ' Remove existing query if it exists
+    On Error Resume Next
+    queryName = "PDFImportQuery"
+    ThisWorkbook.Queries(queryName).Delete
+    On Error GoTo 0
+    
+    ' Use Power Query to import PDF
+    With ActiveSheet.ListObjects.Add(SourceType:=0, Source:= _
+        "OLEDB;Provider=Microsoft.Mashup.OleDb.1;Data Source=$Workbook$;Location=" & pdfPath, _
+        Destination:=ws.Range("A1"))
+        .Name = "PDFImportTable"
+    End With
+    
+    ' Debug message
+    Debug.Print "PDF imported: " & pdfPath
+    
+    ' Call processing function
+    ProcessPDFData
+    
+End Sub
 
-# Get all CSV files in the folder
-csv_files = [f for f in os.listdir(folder_path) if f.endswith(".csv")]
-
-print(f"Found {len(csv_files)} CSV files to merge.")
-
-# Open the output file in write mode to store the merged data
-with open(output_file, "w", encoding="utf-8", newline="") as out_file:
-    first_file = True  # Track the first file for writing headers
-
-    for file in csv_files:
-        file_path = os.path.join(folder_path, file)
-        total_rows = 0  # Track the number of rows in each file
-        
-        print(f"Processing: {file}")
-
-        for chunk in pd.read_csv(file_path, chunksize=chunk_size):
-            chunk["filename"] = file  # Add filename as a column
-            total_rows += len(chunk)
-
-            # Write header only for the first file
-            chunk.to_csv(out_file, mode="a", index=False, header=first_file)
-            first_file = False  # Ensure headers are not repeated
-        
-        print(f"  -> {file}: {total_rows} rows processed.")
-
-print("Merging complete. Output saved to:", output_file)
+Sub ProcessPDFData()
+    ' Add your data processing steps here
+    
+    ' Debug message
+    Debug.Print "Processing imported data..."
+    
+    ' Example: Sort data in ascending order
+    On Error Resume Next
+    ActiveSheet.Range("A1").Sort Key1:=ActiveSheet.Range("A2"), Order1:=xlAscending, Header:=xlYes
+    On Error GoTo 0
+    
+    ' Debug message
+    Debug.Print "Data processing complete."
+End Sub
