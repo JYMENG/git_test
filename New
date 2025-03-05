@@ -1,17 +1,18 @@
 Option Explicit
 
 Sub ImportPDFFiles()
-    Dim wsList As Worksheet, wsData As Worksheet
+    Dim wsList As Worksheet
     Dim pdfFolder As String
     Dim fileName As String
     Dim lastRow As Long
     Dim i As Long
+    Dim queryName As String
+    Dim queryFormula As String
     
-    ' Define worksheets
-    Set wsList = ThisWorkbook.Sheets("PDF_List")  ' Sheet for the list of PDFs
-    Set wsData = ThisWorkbook.Sheets("PDF_Data")  ' Sheet for imported PDF data
+    ' Define worksheet for the list of PDFs
+    Set wsList = ThisWorkbook.Sheets("PDF_List") ' Adjust to your sheet name
     
-    ' Clear old PDF list (Column A in "PDF_List")
+    ' Clear old list (Column A)
     wsList.Range("A:A").Clear
     
     ' Get folder path from named cell
@@ -52,13 +53,13 @@ Sub ImportPDFFiles()
     ' Get last row
     lastRow = wsList.Cells(Rows.Count, 1).End(xlUp).Row
     
-    ' Clear old imported data in "PDF_Data" before importing new PDFs
-    wsData.Cells.Clear
-    
-    ' Process each PDF
+    ' Define the name of the existing Power Query
+    queryName = "PDFImportQuery" ' Change this to your actual Power Query name
+
+    ' Process each PDF by updating query source and refreshing it
     For i = 1 To lastRow
-        Debug.Print "Importing: " & wsList.Cells(i, 1).Value
-        ImportPDF wsList.Cells(i, 1).Value, wsData
+        Debug.Print "Updating query for: " & wsList.Cells(i, 1).Value
+        UpdateQuerySource queryName, wsList.Cells(i, 1).Value
     Next i
     
     ' Mark completion
@@ -68,45 +69,29 @@ Sub ImportPDFFiles()
     MsgBox "All PDF files have been processed!", vbInformation
 End Sub
 
-Sub ImportPDF(pdfPath As String, wsData As Worksheet)
-    Dim queryName As String
-    Dim dataRange As Range
+Sub UpdateQuerySource(queryName As String, newFilePath As String)
+    Dim queryFormula As String
+    Dim pq As WorkbookQuery
     
-    ' Debug message
-    Debug.Print "Reading PDF: " & pdfPath
-    
-    ' Remove existing query if it exists
+    ' Find the Power Query
     On Error Resume Next
-    queryName = "PDFImportQuery"
-    ThisWorkbook.Queries(queryName).Delete
+    Set pq = ThisWorkbook.Queries(queryName)
     On Error GoTo 0
     
-    ' Ensure we start in cell A1 in "PDF_Data"
-    Set dataRange = wsData.Range("A1")
+    ' Check if the query exists
+    If pq Is Nothing Then
+        MsgBox "Query '" & queryName & "' not found!", vbExclamation
+        Exit Sub
+    End If
     
-    ' Use Power Query to import PDF
-    With wsData.ListObjects.Add(SourceType:=0, Source:= _
-        "OLEDB;Provider=Microsoft.Mashup.OleDb.1;Data Source=$Workbook$;Location=" & pdfPath, _
-        Destination:=dataRange)
-        .Name = "PDFImportTable"
-    End With
-    
-    ' Debug message
-    Debug.Print "PDF imported: " & pdfPath
-    
-    ' Call processing function
-    ProcessPDFData wsData
-End Sub
+    ' Modify the query source
+    queryFormula = pq.Formula
+    queryFormula = Replace(queryFormula, "Source = Pdf.Tables(File.Contents(", "Source = Pdf.Tables(File.Contents(""" & newFilePath & """)")
 
-Sub ProcessPDFData(wsData As Worksheet)
-    ' Debug message
-    Debug.Print "Processing imported data..."
+    ' Update the query
+    pq.Formula = queryFormula
     
-    ' Example: Sort data in ascending order (modify as needed)
-    On Error Resume Next
-    wsData.Range("A1").Sort Key1:=wsData.Range("A2"), Order1:=xlAscending, Header:=xlYes
-    On Error GoTo 0
-    
-    ' Debug message
-    Debug.Print "Data processing complete."
+    ' Refresh the query
+    ThisWorkbook.RefreshAll
+    Debug.Print "Query refreshed for: " & newFilePath
 End Sub
