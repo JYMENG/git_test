@@ -1,97 +1,13 @@
-Option Explicit
+from pathlib import Path
 
-Sub ImportPDFFiles()
-    Dim wsList As Worksheet
-    Dim pdfFolder As String
-    Dim fileName As String
-    Dim lastRow As Long
-    Dim i As Long
-    Dim queryName As String
-    Dim queryFormula As String
-    
-    ' Define worksheet for the list of PDFs
-    Set wsList = ThisWorkbook.Sheets("PDF_List") ' Adjust to your sheet name
-    
-    ' Clear old list (Column A)
-    wsList.Range("A:A").Clear
-    
-    ' Get folder path from named cell
-    On Error Resume Next
-    pdfFolder = ThisWorkbook.Names("PDF_Folder_Path").RefersToRange.Value
-    On Error GoTo 0
-    
-    ' Validate folder path
-    If pdfFolder = "" Or Dir(pdfFolder, vbDirectory) = "" Then
-        MsgBox "Invalid or missing folder path! Check the named cell 'PDF_Folder_Path'.", vbExclamation
-        Exit Sub
-    End If
-    
-    ' Ensure folder path ends with "\"
-    If Right(pdfFolder, 1) <> "\" Then pdfFolder = pdfFolder & "\"
-    
-    ' Debug message
-    Debug.Print "Scanning folder: " & pdfFolder
-    
-    ' Get first PDF file
-    fileName = Dir(pdfFolder & "*.pdf")
-    
-    ' Check if folder contains PDFs
-    If fileName = "" Then
-        MsgBox "No PDF files found in the folder!", vbExclamation
-        Exit Sub
-    End If
-    
-    ' List PDF files in "PDF_List"
-    i = 1
-    Do While fileName <> ""
-        wsList.Cells(i, 1).Value = pdfFolder & fileName ' Store full path in Column A
-        Debug.Print "Found file: " & fileName
-        i = i + 1
-        fileName = Dir
-    Loop
-    
-    ' Get last row
-    lastRow = wsList.Cells(Rows.Count, 1).End(xlUp).Row
-    
-    ' Define the name of the existing Power Query
-    queryName = "PDFImportQuery" ' Change this to your actual Power Query name
+# Define the folder and output file
+folder_path = Path("your_folder_path")  # Change this to your folder path
+output_file = "merged_output.txt"
 
-    ' Process each PDF by updating query source and refreshing it
-    For i = 1 To lastRow
-        Debug.Print "Updating query for: " & wsList.Cells(i, 1).Value
-        UpdateQuerySource queryName, wsList.Cells(i, 1).Value
-    Next i
-    
-    ' Mark completion
-    wsList.Cells(lastRow + 2, 1).Value = "FINISHED"
-    Debug.Print "Processing complete!"
-    
-    MsgBox "All PDF files have been processed!", vbInformation
-End Sub
-
-Sub UpdateQuerySource(queryName As String, newFilePath As String)
-    Dim queryFormula As String
-    Dim pq As WorkbookQuery
-    
-    ' Find the Power Query
-    On Error Resume Next
-    Set pq = ThisWorkbook.Queries(queryName)
-    On Error GoTo 0
-    
-    ' Check if the query exists
-    If pq Is Nothing Then
-        MsgBox "Query '" & queryName & "' not found!", vbExclamation
-        Exit Sub
-    End If
-    
-    ' Modify the query source
-    queryFormula = pq.Formula
-    queryFormula = Replace(queryFormula, "Source = Pdf.Tables(File.Contents(", "Source = Pdf.Tables(File.Contents(""" & newFilePath & """)")
-
-    ' Update the query
-    pq.Formula = queryFormula
-    
-    ' Refresh the query
-    ThisWorkbook.RefreshAll
-    Debug.Print "Query refreshed for: " & newFilePath
-End Sub
+# Read all txt files, process line by line, and write back to one file
+with open(output_file, "w", encoding="utf-8") as outfile:
+    for file_path in folder_path.glob("*.txt"):
+        with open(file_path, "r", encoding="utf-8") as infile:
+            for line in infile:
+                if line.strip():  # Remove empty lines
+                    outfile.write(line)
