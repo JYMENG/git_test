@@ -1,22 +1,36 @@
 import pandas as pd
 import json
 
-# Step 1: Read the Excel file
+def safe_json_parse(x, idx=None):
+    try:
+        # Ensure x is a string and strip whitespace
+        if isinstance(x, str):
+            x_stripped = x.strip()
+            # Check for JSON objects or arrays
+            if x_stripped.startswith("{") or x_stripped.startswith("["):
+                return json.loads(x_stripped)
+        # If not valid JSON, return an empty dict
+        return {}
+    except Exception as e:
+        # Print an error message with the row index and a snippet of the data
+        print(f"Error parsing JSON at row {idx}: {x[:50]}... Error: {e}")
+        return {}
+
+# Read the Excel file
 df = pd.read_excel("data.xlsx")
 
-# Step 2: Ensure the JSON column is a string and parse it
+# Ensure the JSON column is treated as a string
 df["json_column"] = df["json_column"].astype(str)
-df["parsed_json"] = df["json_column"].apply(
-    lambda x: json.loads(x) if isinstance(x, str) and x.strip().startswith("{") else {}
-)
 
-# Step 3: Convert the parsed_json Series into a list and normalize it
-json_list = df["parsed_json"].tolist()
-df_expanded = pd.json_normalize(json_list)
+# Parse the JSON with error handling, keeping track of row indices
+df["parsed_json"] = [safe_json_parse(val, idx) for idx, val in enumerate(df["json_column"])]
 
-# Step 4: Drop the original JSON columns and merge the expanded JSON columns
+# Normalize the list of JSON objects into a DataFrame
+df_expanded = pd.json_normalize(df["parsed_json"].tolist())
+
+# Merge the normalized JSON columns back with the original DataFrame (dropping the raw JSON)
 df_final = df.drop(columns=["json_column", "parsed_json"]).join(df_expanded)
 
-# Step 5: Write the final DataFrame to a new Excel file
+# Write the final DataFrame to a new Excel file
 df_final.to_excel("processed_data.xlsx", index=False)
 print("Excel file saved as processed_data.xlsx")
