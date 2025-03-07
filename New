@@ -1,11 +1,20 @@
 import pandas as pd
 import json
 
-# Load Excel file
+# Step 1: Read the Excel file
 df = pd.read_excel("data.xlsx")
 
-# Assume the JSON data is in a column named "json_column"
+# Step 2: Parse the JSON column (assuming it's named "json_column")
 df["parsed_json"] = df["json_column"].apply(json.loads)
 
-# Now you can access nested data, for example:
-print(df["parsed_json"][0])  # First row's parsed JSON
+# Step 3: Normalize JSON for better readability (if JSON contains nested structures)
+df_expanded = df["parsed_json"].apply(pd.json_normalize)
+
+# Step 4: Convert the list of dataframes to a single dataframe
+df_final = pd.concat(df_expanded.tolist(), axis=1)  # Expand nested JSON
+df = df.drop(columns=["parsed_json"]).join(df_final)  # Merge with original data
+
+# Step 5: Write the processed data to a new Excel file
+df.to_excel("processed_data.xlsx", index=False)
+
+print("Excel file saved: processed_data.xlsx")
