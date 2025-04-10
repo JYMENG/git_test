@@ -1,24 +1,29 @@
 import pandas as pd
-from datetime import datetime
 
 # Sample DataFrame
 df = pd.DataFrame({
-    'K1': ['X', 'X', 'Y', 'Y', 'Y'],
-    'K2': [1, 1, 2, 2, 2],
-    'col1': ['a', 'b', 'b', 'a', 'c'],
-    'D': pd.to_datetime(['2024-01-02', '2024-01-03', '2024-02-01', '2024-01-01', '2024-02-02'])
+    'k1': ['A', 'A', 'A', 'B', 'B'],
+    'k2': [1, 1, 1, 2, 2],
+    'c1': ['aaaX', 'aaaY', 'bzz', 'aaaZ', 'bzz'],
+    'c2': ['aaaP', 'bbb', 'aaaQ', 'aaaW', 'aaaM'],
+    'val1': [10, 20, 30, 40, 50],
+    'val2': [100, 200, 300, 400, 500]
 })
 
-# Step 1: Group and calculate results
-grouped = df.groupby(['K1', 'K2'])
+# Step 1: Filter rows where both c1 and c2 start with 'aaa'
+mask = df['c1'].str.startswith('aaa') & df['c2'].str.startswith('aaa')
+filtered = df[mask]
 
-# Step 2: Determine if group has 'a' and get earliest D if so, else assign max date
-result = grouped.apply(lambda g: pd.Series({
-    'has_a': (g['col1'] == 'a').any(),
-    'earliest_D': g.loc[g['col1'] == 'a', 'D'].min() if (g['col1'] == 'a').any() else pd.Timestamp('9999-12-31')
-})).reset_index()
+# Step 2: Group and select val1 and val2 from the first matching row per group
+val_per_group = filtered.groupby(['k1', 'k2'])[['val1', 'val2']].first().reset_index()
 
-# Optional: Merge back to original df if needed
-df = df.merge(result, on=['K1', 'K2'], how='left')
+# Optional: Rename for clarity
+val_per_group = val_per_group.rename(columns={
+    'val1': 'special_val1',
+    'val2': 'special_val2'
+})
 
-print(df)
+# Step 3: Merge back into original DataFrame
+df_merged = df.merge(val_per_group, on=['k1', 'k2'], how='left')
+
+print(df_merged)
