@@ -1,19 +1,20 @@
 import pandas as pd
+import numpy as np
 
-# Sample DataFrame
+# Example DataFrame
 # df = pd.DataFrame({
-#     'A': [...],
-#     'B': [...],
-#     'C': [...],
-#     'D': [...]
+#     'key1': [...],
+#     'key2': [...],
+#     'a':    [...],
+#     'date': pd.to_datetime([...])
 # })
 
-def custom_select(group):
-    has_A = group[group['C'] == 'A']
-    if not has_A.empty:
-        return has_A['D'].min()
-    else:
-        return group['D'].max()
+# Step 1: Define a group-level flag for having 'A'
+has_A = df.groupby(['key1', 'key2'])['a'].transform(lambda x: 'A' in x)
 
-result = df.groupby(['A', 'B'], as_index=False).apply(custom_select).reset_index()
-result.columns = ['A', 'B', 'value']
+# Step 2: Compute earliest date per group, only for groups with 'A'
+earliest_date_with_A = df[df['a'] == 'A'].groupby(['key1', 'key2'])['date'].transform('min')
+
+# Step 3: Assign values based on flag
+df['new_col'] = np.where(has_A, 'yyy', 'bbb')
+df['earliest_date'] = np.where(has_A, earliest_date_with_A, pd.NaT)
