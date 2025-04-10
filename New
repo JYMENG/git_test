@@ -1,20 +1,33 @@
 import pandas as pd
 import numpy as np
 
-# Example DataFrame
-# df = pd.DataFrame({
-#     'key1': [...],
-#     'key2': [...],
-#     'a':    [...],
-#     'date': pd.to_datetime([...])
-# })
+# Sample DataFrame
+df = pd.DataFrame({
+    'key1': ['A', 'A', 'A', 'B', 'B', 'B'],
+    'key2': [1, 1, 1, 2, 2, 2],
+    'col1': ['blueberry', 'redberry', 'bluebell', 'bluefish', 'greenapple', 'bluejay'],
+    'col2': ['bluefish', 'redfish', 'bluejay', 'blueberry', 'greenberry', 'blueberry'],
+    'col3': [5, 6, 7, 8, 9, 10]
+})
 
-# Step 1: Define a group-level flag for having 'A'
-has_A = df.groupby(['key1', 'key2'])['a'].transform(lambda x: 'A' in x)
+# Define the target substring
+target_substring = 'blue'
 
-# Step 2: Compute earliest date per group, only for groups with 'A'
-earliest_date_with_A = df[df['a'] == 'A'].groupby(['key1', 'key2'])['date'].transform('min')
+# Function to assign col4 based on the condition
+def assign_col4(group):
+    # Identify rows where both col1 and col2 start with 'blue'
+    mask = group['col1'].str.startswith(target_substring) & group['col2'].str.startswith(target_substring)
+    if mask.any():
+        # Get the value of col3 from the matched row
+        col3_value = group.loc[mask, 'col3'].iloc[0]
+        # Assign this value to col4 for all rows in the group
+        group['col4'] = col3_value
+    else:
+        # If no match, set col4 to NaN or another default value
+        group['col4'] = np.nan
+    return group
 
-# Step 3: Assign values based on flag
-df['new_col'] = np.where(has_A, 'yyy', 'bbb')
-df['earliest_date'] = np.where(has_A, earliest_date_with_A, pd.NaT)
+# Apply the function to each group
+df = df.groupby(['key1', 'key2'], group_keys=False).apply(assign_col4)
+
+print(df)
