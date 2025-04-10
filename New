@@ -1,33 +1,24 @@
 import pandas as pd
-import numpy as np
+from datetime import datetime
 
 # Sample DataFrame
 df = pd.DataFrame({
-    'key1': ['A', 'A', 'A', 'B', 'B', 'B'],
-    'key2': [1, 1, 1, 2, 2, 2],
-    'col1': ['blueberry', 'redberry', 'bluebell', 'bluefish', 'greenapple', 'bluejay'],
-    'col2': ['bluefish', 'redfish', 'bluejay', 'blueberry', 'greenberry', 'blueberry'],
-    'col3': [5, 6, 7, 8, 9, 10]
+    'K1': ['X', 'X', 'Y', 'Y', 'Y'],
+    'K2': [1, 1, 2, 2, 2],
+    'col1': ['a', 'b', 'b', 'a', 'c'],
+    'D': pd.to_datetime(['2024-01-02', '2024-01-03', '2024-02-01', '2024-01-01', '2024-02-02'])
 })
 
-# Define the target substring
-target_substring = 'blue'
+# Step 1: Group and calculate results
+grouped = df.groupby(['K1', 'K2'])
 
-# Function to assign col4 based on the condition
-def assign_col4(group):
-    # Identify rows where both col1 and col2 start with 'blue'
-    mask = group['col1'].str.startswith(target_substring) & group['col2'].str.startswith(target_substring)
-    if mask.any():
-        # Get the value of col3 from the matched row
-        col3_value = group.loc[mask, 'col3'].iloc[0]
-        # Assign this value to col4 for all rows in the group
-        group['col4'] = col3_value
-    else:
-        # If no match, set col4 to NaN or another default value
-        group['col4'] = np.nan
-    return group
+# Step 2: Determine if group has 'a' and get earliest D if so, else assign max date
+result = grouped.apply(lambda g: pd.Series({
+    'has_a': (g['col1'] == 'a').any(),
+    'earliest_D': g.loc[g['col1'] == 'a', 'D'].min() if (g['col1'] == 'a').any() else pd.Timestamp('9999-12-31')
+})).reset_index()
 
-# Apply the function to each group
-df = df.groupby(['key1', 'key2'], group_keys=False).apply(assign_col4)
+# Optional: Merge back to original df if needed
+df = df.merge(result, on=['K1', 'K2'], how='left')
 
 print(df)
