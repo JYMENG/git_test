@@ -1,32 +1,101 @@
-Sub ListPivotFieldsFromTable()
-    Dim ws As Worksheet
+Sub CreatePivotChartWithSlicers()
+    Dim wsDash As Worksheet
     Dim ptCache As PivotCache
     Dim pt As PivotTable
-    Dim f As PivotField
-
-    ' Use a temporary sheet
-    Set ws = ThisWorkbook.Sheets.Add(After:=Sheets(Sheets.Count))
-    ws.Name = "TempPivotFields"
-
-    ' Create the cache from the data table
+    Dim ptRange As Range
+    Dim ptSheet As Worksheet
+    Dim chartObj As ChartObject
+    Dim dashName As String
+    Dim dateField As PivotField
+    Dim classSlicer As Slicer
+    Dim groupSlicer As Slicer
+    Dim nameVal As String
+    Dim i As Long
+    
+    ' Define dashboard sheet name
+    dashName = "ChartDashboard"
+    
+    ' Delete the existing dashboard sheet if it exists
+    Application.DisplayAlerts = False
+    On Error Resume Next
+    Worksheets(dashName).Delete
+    On Error GoTo 0
+    Application.DisplayAlerts = True
+    
+    ' Create a new dashboard sheet at the front
+    Set wsDash = Worksheets.Add(Before:=Worksheets(1))
+    wsDash.Name = dashName
+    
+    ' Set data source and create PivotCache
     Set ptCache = ThisWorkbook.PivotCaches.Create( _
         SourceType:=xlDatabase, _
         SourceData:="DataTbl")
-
-    ' Create a temporary PivotTable
+    
+    ' Create a PivotTable in the new sheet
+    Set ptRange = wsDash.Cells(3, 1) ' Start from row 3
     Set pt = ptCache.CreatePivotTable( _
-        TableDestination:=ws.Range("A3"), _
-        TableName:="TempPT")
+        TableDestination:=ptRange, _
+        TableName:="PivotTable1")
+    
+    ' Set up PivotFields
+    With pt
+        ' Set Page Fields
+        .PivotFields("class").Orientation = xlPageField
+        .PivotFields("group").Orientation = xlPageField
+        .PivotFields("name").Orientation = xlPageField
+        
+        ' Set Row Field
+        .PivotFields("date").Orientation = xlRowField
+        Set dateField = .PivotFields("date")
+        
+        ' Group the Date Field by 30 days
+        dateField.Group Start:=True, End:=True, By:=Array(30)
+        
+        ' Set Data Fields (assuming v1, v2, v3 are numeric)
+        .AddDataField .PivotFields("v1"), "Sum of v1", xlSum
+        .AddDataField .PivotFields("v2"), "Sum of v2", xlSum
+        .AddDataField .PivotFields("v3"), "Sum of v3", xlSum
+    End With
 
-    ' Print all PivotField names
-    For Each f In pt.PivotFields
-        Debug.Print "[" & f.Name & "]"
-    Next f
+    ' Create PivotChart
+    Set chartObj = wsDash.ChartObjects.Add( _
+        Left:=ptRange.Left + ptRange.Width + 20, _
+        Top:=ptRange.Top, _
+        Width:=500, Height:=300)
+    chartObj.Chart.SetSourceData pt.TableRange2
+    chartObj.Chart.ChartType = xlLine
+    chartObj.Chart.HasTitle = True
+    chartObj.Chart.ChartTitle.Text = "PivotChart for " & nameVal
+    
+    ' Change X-axis label interval to 30
+    With chartObj.Chart.Axes(xlCategory)
+        .MajorUnit = 30  ' Set major unit to 30 (this is the interval between X labels)
+    End With
 
-    MsgBox "Check the Immediate Window (Ctrl+G) for field names."
+    ' Add slicers for Class and Group
+    Set classSlicer = wsDash.Slicers.Add( _
+        SlicerCache:=ThisWorkbook.SlicerCaches.Add( _
+            PivotTable:=pt, _
+            Field:="class"), _
+        Left:=250, Top:=50, Width:=100, Height:=200)
+    classSlicer.Name = "Class Slicer"
+    
+    Set groupSlicer = wsDash.Slicers.Add( _
+        SlicerCache:=ThisWorkbook.SlicerCaches.Add( _
+            PivotTable:=pt, _
+            Field:="group"), _
+        Left:=250, Top:=300, Width:=100, Height:=200)
+    groupSlicer.Name = "Group Slicer"
 
-    ' Optional: Delete temp sheet after inspection
-    ' Application.DisplayAlerts = False
-    ' ws.Delete
-    ' Application.DisplayAlerts = True
+    ' Loop through name values and update charts
+    ' (Add additional logic for looping through each name and creating a chart)
+    For i = 1 To 10 ' Example: Looping through a list of 10 names
+        nameVal = "Name " & i ' Example name, replace with dynamic list
+        
+        ' Update PivotField for each name
+        pt.PivotFields("name").CurrentPage = nameVal
+        
+        ' Update Chart Title dynamically
+        chartObj.Chart.ChartTitle.Text = "PivotChart for " & nameVal
+    Next i
 End Sub
