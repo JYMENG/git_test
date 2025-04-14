@@ -1,29 +1,77 @@
-import pandas as pd
+Sub CreateChartsPerName()
+    Dim wsData As Worksheet
+    Dim wsDash As Worksheet
+    Dim ptCache As PivotCache
+    Dim pt As PivotTable
+    Dim pc As PivotChart
+    Dim tbl As ListObject
+    Dim nameList As Collection
+    Dim cell As Range, dataRng As Range
+    Dim nameVal As String
+    Dim topPos As Double, leftPos As Double
+    Dim chartWidth As Double, chartHeight As Double
+    Dim i As Long
+    
+    Set wsData = Worksheets("Sheet1") ' Change to your data sheet
+    Set tbl = wsData.ListObjects("DataTbl")
+    Set wsDash = Worksheets("ChartDashboard")
+    wsDash.Cells.Clear ' Clear existing charts
+    
+    Set ptCache = ThisWorkbook.PivotCaches.Create( _
+        SourceType:=xlDatabase, _
+        SourceData:=tbl.Range.Address(, , , True))
+    
+    ' Get unique names
+    Set nameList = New Collection
+    On Error Resume Next
+    For Each cell In tbl.ListColumns("name").DataBodyRange
+        nameList.Add cell.Value, CStr(cell.Value)
+    Next cell
+    On Error GoTo 0
 
-# Sample DataFrame
-df = pd.DataFrame({
-    'k1': ['A', 'A', 'A', 'B', 'B'],
-    'k2': [1, 1, 1, 2, 2],
-    'c1': ['aaaX', 'aaaY', 'bzz', 'aaaZ', 'bzz'],
-    'c2': ['aaaP', 'bbb', 'aaaQ', 'aaaW', 'aaaM'],
-    'val1': [10, 20, 30, 40, 50],
-    'val2': [100, 200, 300, 400, 500]
-})
+    ' Chart layout settings
+    chartWidth = 300
+    chartHeight = 200
+    topPos = 10
+    leftPos = 10
+    i = 0
 
-# Step 1: Filter rows where both c1 and c2 start with 'aaa'
-mask = df['c1'].str.startswith('aaa') & df['c2'].str.startswith('aaa')
-filtered = df[mask]
+    ' Loop through each name and build chart
+    For Each nameVal In nameList
+        Dim ptName As String, chartName As String
+        ptName = "PT_" & nameVal
+        chartName = "CH_" & nameVal
 
-# Step 2: Group and select val1 and val2 from the first matching row per group
-val_per_group = filtered.groupby(['k1', 'k2'])[['val1', 'val2']].first().reset_index()
+        ' Add PivotTable
+        Set pt = wsDash.PivotTables.Add(PivotCache:=ptCache, _
+            TableDestination:=wsDash.Cells(1000 + i * 20, 1), TableName:=ptName)
 
-# Optional: Rename for clarity
-val_per_group = val_per_group.rename(columns={
-    'val1': 'special_val1',
-    'val2': 'special_val2'
-})
+        With pt
+            .ClearAllFilters
+            .PivotFields("name").CurrentPage = nameVal
+            .PivotFields("date").Orientation = xlRowField
+            .AddDataField .PivotFields("v1"), "v1", xlSum
+            .AddDataField .PivotFields("v2"), "v2", xlSum
+            .AddDataField .PivotFields("v3"), "v3", xlSum
+            .PivotFields("class").Orientation = xlPageField
+            .PivotFields("group").Orientation = xlPageField
+        End With
 
-# Step 3: Merge back into original DataFrame
-df_merged = df.merge(val_per_group, on=['k1', 'k2'], how='left')
+        ' Create PivotChart
+        Set pc = wsDash.Shapes.AddChart2(201, xlLine).Chart
+        pc.SetSourceData pt.TableRange2
+        pc.ChartTitle.Text = nameVal
 
-print(df_merged)
+        ' Position Chart
+        With pc.Parent
+            .Top = topPos + (Int(i / 2) * (chartHeight + 20))
+            .Left = leftPos + ((i Mod 2) * (chartWidth + 20))
+            .Width = chartWidth
+            .Height = chartHeight
+        End With
+
+        i = i + 1
+    Next nameVal
+
+    MsgBox "Done! Created " & nameList.Count & " charts on '" & wsDash.Name & "'."
+End Sub
