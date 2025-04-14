@@ -1,26 +1,34 @@
-Sub CreateChartsPerName()
+Sub CreatePivotChartsPerName()
     Dim wsData As Worksheet
     Dim wsDash As Worksheet
     Dim ptCache As PivotCache
     Dim pt As PivotTable
-    Dim pc As PivotChart
+    Dim chartObj As ChartObject
     Dim tbl As ListObject
     Dim nameList As Collection
-    Dim cell As Range, dataRng As Range
-    Dim nameVal As String
-    Dim topPos As Double, leftPos As Double
+    Dim cell As Range, nameVal As String
+    Dim chartLeft As Double, chartTop As Double
     Dim chartWidth As Double, chartHeight As Double
-    Dim i As Long
-    
-    Set wsData = Worksheets("Sheet1") ' Change to your data sheet
-    Set tbl = wsData.ListObjects("DataTbl")
-    Set wsDash = Worksheets("ChartDashboard")
-    wsDash.Cells.Clear ' Clear existing charts
-    
+    Dim rowIdx As Long, colIdx As Long
+    Dim chartSheetRowSpacing As Long
+
+    ' Settings
+    Set wsData = ThisWorkbook.Worksheets("Sheet1")         ' Your data sheet
+    Set tbl = wsData.ListObjects("DataTbl")                 ' Your data table
+    Set wsDash = ThisWorkbook.Worksheets("ChartDashboard") ' Output sheet (must exist)
+    wsDash.Cells.Clear                                      ' Clear dashboard
+
+    ' Chart layout
+    chartWidth = 350
+    chartHeight = 250
+    chartSheetRowSpacing = 30
+    rowIdx = 0: colIdx = 0
+
+    ' Create PivotCache
     Set ptCache = ThisWorkbook.PivotCaches.Create( _
         SourceType:=xlDatabase, _
         SourceData:=tbl.Range.Address(, , , True))
-    
+
     ' Get unique names
     Set nameList = New Collection
     On Error Resume Next
@@ -29,23 +37,16 @@ Sub CreateChartsPerName()
     Next cell
     On Error GoTo 0
 
-    ' Chart layout settings
-    chartWidth = 300
-    chartHeight = 200
-    topPos = 10
-    leftPos = 10
-    i = 0
-
-    ' Loop through each name and build chart
+    ' Loop through each name
     For Each nameVal In nameList
-        Dim ptName As String, chartName As String
-        ptName = "PT_" & nameVal
-        chartName = "CH_" & nameVal
-
-        ' Add PivotTable
+        ' Create PivotTable
+        Dim ptRange As Range
+        Set ptRange = wsDash.Cells(1000 + rowIdx * 30, 1) ' Hidden area
         Set pt = wsDash.PivotTables.Add(PivotCache:=ptCache, _
-            TableDestination:=wsDash.Cells(1000 + i * 20, 1), TableName:=ptName)
+            TableDestination:=ptRange)
+        pt.Name = "PT_" & nameVal
 
+        ' Configure PivotTable
         With pt
             .ClearAllFilters
             .PivotFields("name").CurrentPage = nameVal
@@ -57,21 +58,26 @@ Sub CreateChartsPerName()
             .PivotFields("group").Orientation = xlPageField
         End With
 
-        ' Create PivotChart
-        Set pc = wsDash.Shapes.AddChart2(201, xlLine).Chart
-        pc.SetSourceData pt.TableRange2
-        pc.ChartTitle.Text = nameVal
+        ' Create PivotChart linked to the PivotTable
+        Set chartObj = wsDash.ChartObjects.Add( _
+            Left:=colIdx * (chartWidth + 20) + 10, _
+            Top:=rowIdx * (chartHeight + chartSheetRowSpacing) + 10, _
+            Width:=chartWidth, Height:=chartHeight)
 
-        ' Position Chart
-        With pc.Parent
-            .Top = topPos + (Int(i / 2) * (chartHeight + 20))
-            .Left = leftPos + ((i Mod 2) * (chartWidth + 20))
-            .Width = chartWidth
-            .Height = chartHeight
+        With chartObj.Chart
+            .SetSourceData Source:=pt.TableRange2
+            .ChartType = xlLine
+            .HasTitle = True
+            .ChartTitle.Text = nameVal
         End With
 
-        i = i + 1
+        ' Grid layout: 2 charts per row
+        colIdx = colIdx + 1
+        If colIdx >= 2 Then
+            colIdx = 0
+            rowIdx = rowIdx + 1
+        End If
     Next nameVal
 
-    MsgBox "Done! Created " & nameList.Count & " charts on '" & wsDash.Name & "'."
+    MsgBox "Created " & nameList.Count & " PivotCharts for each name."
 End Sub
