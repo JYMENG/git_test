@@ -1,83 +1,12 @@
-Sub CreatePivotChartsPerName()
-    Dim wsData As Worksheet
-    Dim wsDash As Worksheet
-    Dim ptCache As PivotCache
-    Dim pt As PivotTable
-    Dim chartObj As ChartObject
-    Dim tbl As ListObject
-    Dim nameList As Collection
-    Dim cell As Range, nameVal As String
-    Dim chartLeft As Double, chartTop As Double
-    Dim chartWidth As Double, chartHeight As Double
-    Dim rowIdx As Long, colIdx As Long
-    Dim chartSheetRowSpacing As Long
+Sub ListPivotCacheFields()
+    Dim pc As PivotCache
+    Dim f As PivotField
 
-    ' Settings
-    Set wsData = ThisWorkbook.Worksheets("Sheet1")         ' Your data sheet
-    Set tbl = wsData.ListObjects("DataTbl")                 ' Your data table
-    Set wsDash = ThisWorkbook.Worksheets("ChartDashboard") ' Output sheet (must exist)
-    wsDash.Cells.Clear                                      ' Clear dashboard
-
-    ' Chart layout
-    chartWidth = 350
-    chartHeight = 250
-    chartSheetRowSpacing = 30
-    rowIdx = 0: colIdx = 0
-
-    ' Create PivotCache
-    Set ptCache = ThisWorkbook.PivotCaches.Create( _
+    Set pc = ThisWorkbook.PivotCaches.Create( _
         SourceType:=xlDatabase, _
-        SourceData:=tbl.Range.Address(, , , True))
+        SourceData:="DataTbl")
 
-    ' Get unique names
-    Set nameList = New Collection
-    On Error Resume Next
-    For Each cell In tbl.ListColumns("name").DataBodyRange
-        nameList.Add cell.Value, CStr(cell.Value)
-    Next cell
-    On Error GoTo 0
-
-    ' Loop through each name
-    For Each nameVal In nameList
-        ' Create PivotTable
-        Dim ptRange As Range
-        Set ptRange = wsDash.Cells(1000 + rowIdx * 30, 1) ' Hidden area
-        Set pt = wsDash.PivotTables.Add(PivotCache:=ptCache, _
-            TableDestination:=ptRange)
-        pt.Name = "PT_" & nameVal
-
-        ' Configure PivotTable
-        With pt
-            .ClearAllFilters
-            .PivotFields("name").CurrentPage = nameVal
-            .PivotFields("date").Orientation = xlRowField
-            .AddDataField .PivotFields("v1"), "v1", xlSum
-            .AddDataField .PivotFields("v2"), "v2", xlSum
-            .AddDataField .PivotFields("v3"), "v3", xlSum
-            .PivotFields("class").Orientation = xlPageField
-            .PivotFields("group").Orientation = xlPageField
-        End With
-
-        ' Create PivotChart linked to the PivotTable
-        Set chartObj = wsDash.ChartObjects.Add( _
-            Left:=colIdx * (chartWidth + 20) + 10, _
-            Top:=rowIdx * (chartHeight + chartSheetRowSpacing) + 10, _
-            Width:=chartWidth, Height:=chartHeight)
-
-        With chartObj.Chart
-            .SetSourceData Source:=pt.TableRange2
-            .ChartType = xlLine
-            .HasTitle = True
-            .ChartTitle.Text = nameVal
-        End With
-
-        ' Grid layout: 2 charts per row
-        colIdx = colIdx + 1
-        If colIdx >= 2 Then
-            colIdx = 0
-            rowIdx = rowIdx + 1
-        End If
-    Next nameVal
-
-    MsgBox "Created " & nameList.Count & " PivotCharts for each name."
+    For Each f In pc.PivotFields
+        Debug.Print "[" & f.Name & "]"
+    Next f
 End Sub
