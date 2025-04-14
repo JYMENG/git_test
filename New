@@ -1,12 +1,32 @@
-Sub ListPivotCacheFields()
-    Dim pc As PivotCache
+Sub ListPivotFieldsFromTable()
+    Dim ws As Worksheet
+    Dim ptCache As PivotCache
+    Dim pt As PivotTable
     Dim f As PivotField
 
-    Set pc = ThisWorkbook.PivotCaches.Create( _
+    ' Use a temporary sheet
+    Set ws = ThisWorkbook.Sheets.Add(After:=Sheets(Sheets.Count))
+    ws.Name = "TempPivotFields"
+
+    ' Create the cache from the data table
+    Set ptCache = ThisWorkbook.PivotCaches.Create( _
         SourceType:=xlDatabase, _
         SourceData:="DataTbl")
 
-    For Each f In pc.PivotFields
+    ' Create a temporary PivotTable
+    Set pt = ptCache.CreatePivotTable( _
+        TableDestination:=ws.Range("A3"), _
+        TableName:="TempPT")
+
+    ' Print all PivotField names
+    For Each f In pt.PivotFields
         Debug.Print "[" & f.Name & "]"
     Next f
+
+    MsgBox "Check the Immediate Window (Ctrl+G) for field names."
+
+    ' Optional: Delete temp sheet after inspection
+    ' Application.DisplayAlerts = False
+    ' ws.Delete
+    ' Application.DisplayAlerts = True
 End Sub
