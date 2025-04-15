@@ -1,105 +1,12 @@
-Sub CreateChartsPerNameWithSharedSlicers()
-    Dim wsDash As Worksheet
-    Dim pc As PivotCache
-    Dim pt As PivotTable
-    Dim chartObj As ChartObject
-    Dim topOffset As Long, chartHeight As Long
-    Dim dataSheet As Worksheet
-    Dim uniqueNames As Collection
-    Dim cell As Range
-    Dim nameVal As String
-    Dim slicerCacheClass As SlicerCache, slicerCacheGroup As SlicerCache
-    Dim ptName As String
+Sub SetXAxis_90DaysProperly()
+    Dim ch As Chart
+    Set ch = Worksheets("ChartDashboard").ChartObjects(1).Chart
 
-    ' Setup
-    chartHeight = 300
-    topOffset = 50
-    Set dataSheet = Worksheets("RawData") ' Your raw data sheet
-    On Error Resume Next
-    Application.DisplayAlerts = False
-    Worksheets("ChartDashboard").Delete
-    Application.DisplayAlerts = True
-    On Error GoTo 0
-    Set wsDash = Worksheets.Add
-    wsDash.Name = "ChartDashboard"
-
-    ' Create pivot cache
-    Set pc = ThisWorkbook.PivotCaches.Create( _
-        SourceType:=xlDatabase, _
-        SourceData:="DataTbl") ' Your named range or table
-
-    ' Get unique names
-    Set uniqueNames = New Collection
-    On Error Resume Next
-    For Each cell In dataSheet.Range("DataTbl[name]") ' Adjust range as needed
-        If cell.Value <> "" Then uniqueNames.Add cell.Value, CStr(cell.Value)
-    Next cell
-    On Error GoTo 0
-
-    ' Loop through each unique name
-    Dim i As Long
-    For i = 1 To uniqueNames.Count
-        nameVal = uniqueNames(i)
-        ptName = "PT_" & Replace(nameVal, " ", "_")
-
-        ' Create pivot table
-        Set pt = pc.CreatePivotTable( _
-            TableDestination:=wsDash.Cells(1, (i - 1) * 10 + 1), _
-            TableName:=ptName)
-
-        With pt
-            ' Page fields
-            .PivotFields("class").Orientation = xlPageField
-            .PivotFields("group").Orientation = xlPageField
-            .PivotFields("name").Orientation = xlPageField
-            .PivotFields("name").CurrentPage = nameVal
-
-            ' Row field
-            .PivotFields("date").Orientation = xlRowField
-            On Error Resume Next ' In case date grouping already exists
-            .PivotFields("date").Group Start:=True, End:=True, By:=Array(30)
-            On Error GoTo 0
-
-            ' Data fields
-            .AddDataField .PivotFields("v1"), "Sum of v1", xlSum
-            .AddDataField .PivotFields("v2"), "Sum of v2", xlSum
-            .AddDataField .PivotFields("v3"), "Sum of v3", xlSum
-        End With
-
-        ' Create chart
-        Set chartObj = wsDash.ChartObjects.Add( _
-            Left:=20, Top:=topOffset, Width:=500, Height:=chartHeight)
-        chartObj.Chart.SetSourceData pt.TableRange2
-        chartObj.Chart.ChartType = xlLine
-        chartObj.Chart.HasTitle = True
-        chartObj.Chart.ChartTitle.Text = nameVal
-
-        ' Set X-axis label interval to 30
-        On Error Resume Next
-        With chartObj.Chart.Axes(xlCategory)
-            .MajorUnit = 30
-        End With
-        On Error GoTo 0
-
-        topOffset = topOffset + chartHeight + 20
-    Next i
-
-    ' Create slicers connected to all PivotTables
-    Set slicerCacheClass = ThisWorkbook.SlicerCaches.Add2( _
-        PivotTable:=wsDash.PivotTables(1), Field:="class")
-    slicerCacheClass.Slicers.Add _
-        SlicerDestination:=wsDash, _
-        Left:=550, Top:=50, Width:=100, Height:=150
-
-    Set slicerCacheGroup = ThisWorkbook.SlicerCaches.Add2( _
-        PivotTable:=wsDash.PivotTables(1), Field:="group")
-    slicerCacheGroup.Slicers.Add _
-        SlicerDestination:=wsDash, _
-        Left:=550, Top:=220, Width:=100, Height:=150
-
-    ' Connect slicers to all pivot tables
-    For i = 2 To wsDash.PivotTables.Count
-        slicerCacheClass.PivotTables.Add wsDash.PivotTables(i)
-        slicerCacheGroup.PivotTables.Add wsDash.PivotTables(i)
-    Next i
+    With ch.Axes(xlCategory)
+        .CategoryType = xlTimeScale   ' Force date axis (required!)
+        .MinimumScale = DateSerial(2024, 1, 1)  ' Adjust as needed
+        .MaximumScale = DateSerial(2024, 12, 31)
+        .MajorUnit = 90
+        .MajorUnitScale = xlDays      ' Valid only with xlTimeScale
+    End With
 End Sub
