@@ -1,142 +1,105 @@
-Sub CreatePivotChartWithSlicers()
+Sub CreateChartsPerNameWithSharedSlicers()
     Dim wsDash As Worksheet
-    Dim ptCache As PivotCache
+    Dim pc As PivotCache
     Dim pt As PivotTable
-    Dim ptRange As Range
-    Dim ptSheet As Worksheet
     Dim chartObj As ChartObject
-    Dim dashName As String
-    Dim dateField As PivotField
-    Dim classSlicer As Slicer
-    Dim groupSlicer As Slicer
+    Dim topOffset As Long, chartHeight As Long
+    Dim dataSheet As Worksheet
+    Dim uniqueNames As Collection
+    Dim cell As Range
     Dim nameVal As String
-    Dim i As Long
-    Dim slicerCacheClass As SlicerCache
-    Dim slicerCacheGroup As SlicerCache
-    
-    ' Define dashboard sheet name
-    dashName = "ChartDashboard"
-    
-    ' Delete the existing dashboard sheet if it exists
-    Application.DisplayAlerts = False
+    Dim slicerCacheClass As SlicerCache, slicerCacheGroup As SlicerCache
+    Dim ptName As String
+
+    ' Setup
+    chartHeight = 300
+    topOffset = 50
+    Set dataSheet = Worksheets("RawData") ' Your raw data sheet
     On Error Resume Next
-    Worksheets(dashName).Delete
-    On Error GoTo 0
+    Application.DisplayAlerts = False
+    Worksheets("ChartDashboard").Delete
     Application.DisplayAlerts = True
-    
-    ' Create a new dashboard sheet at the front
-    Set wsDash = Worksheets.Add(Before:=Worksheets(1))
-    wsDash.Name = dashName
-    
-    ' Set data source and create PivotCache
-    Set ptCache = ThisWorkbook.PivotCaches.Create( _
+    On Error GoTo 0
+    Set wsDash = Worksheets.Add
+    wsDash.Name = "ChartDashboard"
+
+    ' Create pivot cache
+    Set pc = ThisWorkbook.PivotCaches.Create( _
         SourceType:=xlDatabase, _
-        SourceData:="DataTbl")
-    
-    ' Create the first PivotTable in the new sheet
-    Set ptRange = wsDash.Cells(3, 1) ' Start from row 3
-    Set pt = ptCache.CreatePivotTable( _
-        TableDestination:=ptRange, _
-        TableName:="PivotTable1")
-    
-    ' Set up PivotFields for the first PivotTable
-    With pt
-        ' Set Page Fields
-        .PivotFields("class").Orientation = xlPageField
-        .PivotFields("group").Orientation = xlPageField
-        .PivotFields("name").Orientation = xlPageField
-        
-        ' Set Row Field
-        .PivotFields("date").Orientation = xlRowField
-        Set dateField = .PivotFields("date")
-        
-        ' Group the Date Field by 30 days
-        dateField.Group Start:=True, End:=True, By:=Array(30)
-        
-        ' Set Data Fields (assuming v1, v2, v3 are numeric)
-        .AddDataField .PivotFields("v1"), "Sum of v1", xlSum
-        .AddDataField .PivotFields("v2"), "Sum of v2", xlSum
-        .AddDataField .PivotFields("v3"), "Sum of v3", xlSum
-    End With
+        SourceData:="DataTbl") ' Your named range or table
 
-    ' Create the first PivotChart
-    Set chartObj = wsDash.ChartObjects.Add( _
-        Left:=ptRange.Left + ptRange.Width + 20, _
-        Top:=ptRange.Top, _
-        Width:=500, Height:=300)
-    chartObj.Chart.SetSourceData pt.TableRange2
-    chartObj.Chart.ChartType = xlLine
-    chartObj.Chart.HasTitle = True
-    chartObj.Chart.ChartTitle.Text = "PivotChart for " & nameVal
-    
-    ' Change X-axis label interval to 30
-    With chartObj.Chart.Axes(xlCategory)
-        .MajorUnit = 30  ' Set major unit to 30 (this is the interval between X labels)
-    End With
-    
-    ' Create the second PivotTable in the same sheet
-    Set ptRange = wsDash.Cells(20, 1) ' Start below the first PivotTable
-    Set pt = ptCache.CreatePivotTable( _
-        TableDestination:=ptRange, _
-        TableName:="PivotTable2")
-    
-    ' Set up PivotFields for the second PivotTable
-    With pt
-        ' Set Page Fields
-        .PivotFields("class").Orientation = xlPageField
-        .PivotFields("group").Orientation = xlPageField
-        .PivotFields("name").Orientation = xlPageField
-        
-        ' Set Row Field
-        .PivotFields("date").Orientation = xlRowField
-        Set dateField = .PivotFields("date")
-        
-        ' Group the Date Field by 30 days
-        dateField.Group Start:=True, End:=True, By:=Array(30)
-        
-        ' Set Data Fields (assuming v1, v2, v3 are numeric)
-        .AddDataField .PivotFields("v1"), "Sum of v1", xlSum
-        .AddDataField .PivotFields("v2"), "Sum of v2", xlSum
-        .AddDataField .PivotFields("v3"), "Sum of v3", xlSum
-    End With
+    ' Get unique names
+    Set uniqueNames = New Collection
+    On Error Resume Next
+    For Each cell In dataSheet.Range("DataTbl[name]") ' Adjust range as needed
+        If cell.Value <> "" Then uniqueNames.Add cell.Value, CStr(cell.Value)
+    Next cell
+    On Error GoTo 0
 
-    ' Create the second PivotChart
-    Set chartObj = wsDash.ChartObjects.Add( _
-        Left:=ptRange.Left + ptRange.Width + 20, _
-        Top:=ptRange.Top, _
-        Width:=500, Height:=300)
-    chartObj.Chart.SetSourceData pt.TableRange2
-    chartObj.Chart.ChartType = xlLine
-    chartObj.Chart.HasTitle = True
-    chartObj.Chart.ChartTitle.Text = "PivotChart for " & nameVal
-    
-    ' Change X-axis label interval to 30 for the second chart
-    With chartObj.Chart.Axes(xlCategory)
-        .MajorUnit = 30
-    End With
-    
-    ' Create a common slicer for 'class'
-    Set slicerCacheClass = ThisWorkbook.SlicerCaches.Add( _
-        PivotTable:=pt, _
-        Field:="class")
-    Set classSlicer = wsDash.Slicers.Add( _
-        SlicerCache:=slicerCacheClass, _
-        Left:=250, Top:=50, Width:=100, Height:=200)
-    classSlicer.Name = "Class Slicer"
-    
-    ' Create a common slicer for 'group'
-    Set slicerCacheGroup = ThisWorkbook.SlicerCaches.Add( _
-        PivotTable:=pt, _
-        Field:="group")
-    Set groupSlicer = wsDash.Slicers.Add( _
-        SlicerCache:=slicerCacheGroup, _
-        Left:=250, Top:=300, Width:=100, Height:=200)
-    groupSlicer.Name = "Group Slicer"
+    ' Loop through each unique name
+    Dim i As Long
+    For i = 1 To uniqueNames.Count
+        nameVal = uniqueNames(i)
+        ptName = "PT_" & Replace(nameVal, " ", "_")
 
-    ' Connect slicers to both PivotTables
-    slicerCacheClass.PivotTables.Add pt
-    slicerCacheClass.PivotTables.Add pt
-    
-    slicerCacheGroup.PivotTables.Add pt
-    slicerCacheGroup.PivotTables.Add pt
+        ' Create pivot table
+        Set pt = pc.CreatePivotTable( _
+            TableDestination:=wsDash.Cells(1, (i - 1) * 10 + 1), _
+            TableName:=ptName)
+
+        With pt
+            ' Page fields
+            .PivotFields("class").Orientation = xlPageField
+            .PivotFields("group").Orientation = xlPageField
+            .PivotFields("name").Orientation = xlPageField
+            .PivotFields("name").CurrentPage = nameVal
+
+            ' Row field
+            .PivotFields("date").Orientation = xlRowField
+            On Error Resume Next ' In case date grouping already exists
+            .PivotFields("date").Group Start:=True, End:=True, By:=Array(30)
+            On Error GoTo 0
+
+            ' Data fields
+            .AddDataField .PivotFields("v1"), "Sum of v1", xlSum
+            .AddDataField .PivotFields("v2"), "Sum of v2", xlSum
+            .AddDataField .PivotFields("v3"), "Sum of v3", xlSum
+        End With
+
+        ' Create chart
+        Set chartObj = wsDash.ChartObjects.Add( _
+            Left:=20, Top:=topOffset, Width:=500, Height:=chartHeight)
+        chartObj.Chart.SetSourceData pt.TableRange2
+        chartObj.Chart.ChartType = xlLine
+        chartObj.Chart.HasTitle = True
+        chartObj.Chart.ChartTitle.Text = nameVal
+
+        ' Set X-axis label interval to 30
+        On Error Resume Next
+        With chartObj.Chart.Axes(xlCategory)
+            .MajorUnit = 30
+        End With
+        On Error GoTo 0
+
+        topOffset = topOffset + chartHeight + 20
+    Next i
+
+    ' Create slicers connected to all PivotTables
+    Set slicerCacheClass = ThisWorkbook.SlicerCaches.Add2( _
+        PivotTable:=wsDash.PivotTables(1), Field:="class")
+    slicerCacheClass.Slicers.Add _
+        SlicerDestination:=wsDash, _
+        Left:=550, Top:=50, Width:=100, Height:=150
+
+    Set slicerCacheGroup = ThisWorkbook.SlicerCaches.Add2( _
+        PivotTable:=wsDash.PivotTables(1), Field:="group")
+    slicerCacheGroup.Slicers.Add _
+        SlicerDestination:=wsDash, _
+        Left:=550, Top:=220, Width:=100, Height:=150
+
+    ' Connect slicers to all pivot tables
+    For i = 2 To wsDash.PivotTables.Count
+        slicerCacheClass.PivotTables.Add wsDash.PivotTables(i)
+        slicerCacheGroup.PivotTables.Add wsDash.PivotTables(i)
+    Next i
 End Sub
