@@ -1,12 +1,21 @@
-Sub SetXAxis_90DaysProperly()
-    Dim ch As Chart
-    Set ch = Worksheets("ChartDashboard").ChartObjects(1).Chart
+import pdfplumber
+import pandas as pd
+from pathlib import Path
 
-    With ch.Axes(xlCategory)
-        .CategoryType = xlTimeScale   ' Force date axis (required!)
-        .MinimumScale = DateSerial(2024, 1, 1)  ' Adjust as needed
-        .MaximumScale = DateSerial(2024, 12, 31)
-        .MajorUnit = 90
-        .MajorUnitScale = xlDays      ' Valid only with xlTimeScale
-    End With
-End Sub
+pdf_folder = Path("path/to/your/folder")
+all_tables = []
+
+for pdf_file in pdf_folder.glob("*.pdf"):
+    with pdfplumber.open(pdf_file) as pdf:
+        for page in pdf.pages:
+            tables = page.extract_tables()
+            for table in tables:
+                df = pd.DataFrame(table[1:], columns=table[0])  # Skip header row
+                df['source_pdf'] = pdf_file.name  # Optional: tag source
+                all_tables.append(df)
+
+# Combine all tables into one DataFrame
+final_df = pd.concat(all_tables, ignore_index=True)
+
+# Export to Excel
+final_df.to_excel("combined_output.xlsx", index=False)
