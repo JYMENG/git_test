@@ -1,26 +1,44 @@
 Sub ProcessData()
-    Dim wsControl As Worksheet, wsTab2 As Worksheet, wsOutput As Worksheet
+    ' === Sheet references ===
+    Dim wsControl As Worksheet
+    Dim wsTab2 As Worksheet
+    Dim wsOutput As Worksheet
+    
+    ' === Control loop ===
+    Dim lastRowControl As Long
+    Dim i As Long
+    Dim key1 As String, key2 As String
+    
+    ' === Tab2 lookups ===
+    Dim rowTab2 As Long
+    Dim matchRow1 As Long, matchRow2 As Long
+    Dim colTab2 As Long
+    Dim colWithSlash As Long
+    Dim maxCol As Long
+    Dim header As String
+    Dim cellVal As Variant
+    Dim val1 As Variant
+    
+    ' === Output ===
+    Dim outputRow As Long
+
+    ' === Setup ===
     Set wsControl = ThisWorkbook.Sheets("Control")
     Set wsTab2 = ThisWorkbook.Sheets("Tab2")
     Set wsOutput = ThisWorkbook.Sheets("Output")
-    
-    Dim lastRowControl As Long
+
     lastRowControl = wsControl.Cells(wsControl.Rows.Count, 1).End(xlUp).Row
-    
-    Dim outputRow As Long
-    outputRow = 2 ' Start writing to row 2 in Output sheet
-    
-    Dim i As Long
+    outputRow = 2 ' Start writing on row 2 (assuming row 1 has headers)
+
+    ' === Main loop through Control sheet ===
     For i = 2 To lastRowControl
-        Dim key1 As String, key2 As String
         key1 = Trim(wsControl.Cells(i, 1).Value)
         key2 = Trim(wsControl.Cells(i, 2).Value)
 
-        If key1 = "" Or key2 = "" Then GoTo SkipRow ' Skip empty keys
+        If key1 = "" Or key2 = "" Then GoTo SkipRow
 
-        ' === Step 1: Find first non-empty row in Tab2 where col1 = key1
-        Dim matchRow1 As Long: matchRow1 = 0
-        Dim rowTab2 As Long
+        ' --- Find first matching row in Tab2 for key1 ---
+        matchRow1 = 0
         For rowTab2 = 2 To wsTab2.Rows.Count
             If Trim(wsTab2.Cells(rowTab2, 1).Value) = key1 Then
                 matchRow1 = rowTab2
@@ -31,15 +49,12 @@ Sub ProcessData()
 
         If matchRow1 = 0 Then GoTo SkipRow
 
-        ' === Step 2: Find first non-empty cell with "/" in the matchRow1
-        Dim colWithSlash As Long: colWithSlash = 0
-        Dim header As String
-        Dim maxCol As Long
+        ' --- Find first cell in that row with a "/" ---
+        colWithSlash = 0
+        header = ""
         maxCol = wsTab2.Cells(1, wsTab2.Columns.Count).End(xlToLeft).Column
 
-        Dim colTab2 As Long
-        For colTab2 = 2 To maxCol ' Skip col 1 (ID column)
-            Dim cellVal As Variant
+        For colTab2 = 2 To maxCol
             cellVal = wsTab2.Cells(matchRow1, colTab2).Value
             If Not IsEmpty(cellVal) And InStr(cellVal, "/") > 0 Then
                 colWithSlash = colTab2
@@ -50,23 +65,22 @@ Sub ProcessData()
 
         If colWithSlash = 0 Or header = "" Then GoTo SkipRow
 
-        ' === Step 3: Find row where col1 = key2 (lookup ID)
-        Dim matchRow2 As Long: matchRow2 = 0
+        ' --- Find row where col1 = key2 ---
+        matchRow2 = 0
         For rowTab2 = 2 To wsTab2.Rows.Count
             If Trim(wsTab2.Cells(rowTab2, 1).Value) = key2 Then
                 matchRow2 = rowTab2
                 Exit For
             End If
-            If Application.CountA(wsTab2.Rows(rowTab2)) = 0 Then Exit For ' Stop at empty row
+            If Application.CountA(wsTab2.Rows(rowTab2)) = 0 Then Exit For
         Next rowTab2
 
         If matchRow2 = 0 Then GoTo SkipRow
 
-        ' === Step 4: Get value at [matchRow2, column with header]
-        Dim val1 As Variant
+        ' --- Get value from Tab2 based on header ---
         val1 = wsTab2.Cells(matchRow2, colWithSlash).Value
 
-        ' === Step 5: Output result
+        ' --- Write to Output sheet ---
         wsOutput.Cells(outputRow, 1).Value = key1
         wsOutput.Cells(outputRow, 2).Value = key2
         wsOutput.Cells(outputRow, 3).Value = header
@@ -74,7 +88,7 @@ Sub ProcessData()
         outputRow = outputRow + 1
 
 SkipRow:
-        ' Continue loop
+        ' Continue to next Control row
     Next i
 
     MsgBox "Done!"
