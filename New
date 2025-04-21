@@ -3,19 +3,18 @@ import pandas as pd
 from pathlib import Path
 
 # --- Step 1: Load Control File ---
-control_df = pd.read_excel("control.xlsx")  # Must contain 'col1' and 'col2' columns
+control_df = pd.read_excel("control.xlsx")  # must have 'col1' and 'col2'
 
 # --- Step 2: Setup ---
-pdf_folder = Path("path/to/pdf/folder")  # <-- change this
+pdf_folder = Path("path/to/pdf/folder")  # <-- change this to your folder
 results = []
 
-# --- Step 3: Process PDFs ---
+# --- Step 3: Loop through all PDFs ---
 for pdf_file in pdf_folder.glob("*.pdf"):
     with pdfplumber.open(pdf_file) as pdf:
         for page in pdf.pages:
             tables = page.extract_tables()
             for table in tables:
-                # Clean table into DataFrame
                 if not table or len(table) < 2:
                     continue
                 try:
@@ -25,47 +24,49 @@ for pdf_file in pdf_folder.glob("*.pdf"):
                 df.columns = df.columns.str.strip()
                 df = df.dropna(how="all")
 
-                # Step 4: Loop over control rows
+                # --- Loop over each col1-col2 pair from control ---
                 for _, ctrl_row in control_df.iterrows():
                     col1_val = str(ctrl_row['col1']).strip()
                     col2_val = str(ctrl_row['col2']).strip()
 
-                    # Find the row where first column == col1_val
-                    col1_match = df[df.iloc[:, 0].astype(str).str.strip() == col1_val]
-                    if col1_match.empty:
+                    # --- Find the position (row, col) of col1 in the table ---
+                    match_indices = list(zip(*((df == col1_val).values).nonzero()))
+                    if not match_indices:
                         continue
-                    col1_row = col1_match.iloc[0]
+                    row_idx, col_idx = match_indices[0]
+                    row_series = df.iloc[row_idx]
 
-                    # Find the first 3 column headers in that row where the value contains a "/"
+                    # --- From col_idx+1 onward, find first 3 columns where that row contains '/' ---
                     date_cols = []
-                    for col_name in df.columns[1:]:  # skip the first column (label column)
-                        val = str(col1_row[col_name])
+                    for col in df.columns[col_idx + 1:]:
+                        val = str(row_series[col])
                         if '/' in val:
-                            date_cols.append(col_name)
+                            date_cols.append(col)
                         if len(date_cols) == 3:
                             break
                     if not date_cols:
                         continue
 
-                    # Find the row where first column == col2_val
-                    col2_match = df[df.iloc[:, 0].astype(str).str.strip() == col2_val]
-                    if col2_match.empty:
+                    # --- Find row where col2 appears anywhere ---
+                    match2_indices = list(zip(*((df == col2_val).values).nonzero()))
+                    if not match2_indices:
                         continue
-                    col2_row = col2_match.iloc[0]
+                    row2_idx, _ = match2_indices[0]
+                    row2_series = df.iloc[row2_idx]
 
+                    # --- Collect results for each date ---
                     for date_col in date_cols:
-                        value = col2_row.get(date_col, None)
                         results.append({
-                            "col1": col1_val,
-                            "col2": col2_val,
-                            "date": col1_row[date_col],  # actual date string from col1 row
-                            "value": value
+                            'col1': col1_val,
+                            'col2': col2_val,
+                            'date': row_series[date_col],
+                            'value': row2_series.get(date_col, None)
                         })
 
-# --- Step 5: Save Result ---
+# --- Step 4: Export Results ---
 if results:
     result_df = pd.DataFrame(results)
     result_df.to_excel("final_output.xlsx", index=False)
     print("Exported to final_output.xlsx")
 else:
-    print("No matches found.")
+    print("No matching data found.")
