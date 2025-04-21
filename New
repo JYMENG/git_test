@@ -1,72 +1,32 @@
-import pdfplumber
 import pandas as pd
-from pathlib import Path
+import time
+import win32com.client as win32
 
-# --- Step 1: Load Control File ---
-control_df = pd.read_excel("control.xlsx")  # must have 'col1' and 'col2'
+# Step 1: Setup
+excel_path = "pq_template.xlsx"
+sheet_name = "TableOutput"  # Sheet where Power Query outputs cleaned data
 
-# --- Step 2: Setup ---
-pdf_folder = Path("path/to/pdf/folder")  # <-- change this to your folder
-results = []
+# Step 2: Open Excel and refresh Power Query
+excel = win32.gencache.EnsureDispatch('Excel.Application')
+excel.Visible = False  # Set to True if you want to see it open
+workbook = excel.Workbooks.Open(excel_path)
 
-# --- Step 3: Loop through all PDFs ---
-for pdf_file in pdf_folder.glob("*.pdf"):
-    with pdfplumber.open(pdf_file) as pdf:
-        for page in pdf.pages:
-            tables = page.extract_tables()
-            for table in tables:
-                if not table or len(table) < 2:
-                    continue
-                try:
-                    df = pd.DataFrame(table[1:], columns=table[0])
-                except Exception:
-                    continue
-                df.columns = df.columns.str.strip()
-                df = df.dropna(how="all")
+print("Refreshing Power Query...")
+workbook.RefreshAll()
 
-                # --- Loop over each col1-col2 pair from control ---
-                for _, ctrl_row in control_df.iterrows():
-                    col1_val = str(ctrl_row['col1']).strip()
-                    col2_val = str(ctrl_row['col2']).strip()
+# Wait for queries to complete
+time.sleep(2)
+while excel.CalculationState != 0:
+    time.sleep(1)
 
-                    # --- Find the position (row, col) of col1 in the table ---
-                    match_indices = list(zip(*((df == col1_val).values).nonzero()))
-                    if not match_indices:
-                        continue
-                    row_idx, col_idx = match_indices[0]
-                    row_series = df.iloc[row_idx]
+print("Refresh complete.")
 
-                    # --- From col_idx+1 onward, find first 3 columns where that row contains '/' ---
-                    date_cols = []
-                    for col in df.columns[col_idx + 1:]:
-                        val = str(row_series[col])
-                        if '/' in val:
-                            date_cols.append(col)
-                        if len(date_cols) == 3:
-                            break
-                    if not date_cols:
-                        continue
+# Step 3: Save and close
+workbook.Save()
+workbook.Close(False)
+excel.Quit()
 
-                    # --- Find row where col2 appears anywhere ---
-                    match2_indices = list(zip(*((df == col2_val).values).nonzero()))
-                    if not match2_indices:
-                        continue
-                    row2_idx, _ = match2_indices[0]
-                    row2_series = df.iloc[row2_idx]
-
-                    # --- Collect results for each date ---
-                    for date_col in date_cols:
-                        results.append({
-                            'col1': col1_val,
-                            'col2': col2_val,
-                            'date': row_series[date_col],
-                            'value': row2_series.get(date_col, None)
-                        })
-
-# --- Step 4: Export Results ---
-if results:
-    result_df = pd.DataFrame(results)
-    result_df.to_excel("final_output.xlsx", index=False)
-    print("Exported to final_output.xlsx")
-else:
-    print("No matching data found.")
+# Step 4: Read cleaned data and continue your logic
+df = pd.read_excel(excel_path, sheet_name=sheet_name)
+print(df.head())
+# -> now apply your col1/col2/date/value logic on this clean df
