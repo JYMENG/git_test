@@ -8,67 +8,65 @@ Sub ProcessData()
     lastRowControl = wsControl.Cells(wsControl.Rows.Count, 1).End(xlUp).Row
     
     Dim outputRow As Long
-    outputRow = 2 ' Assuming headers in Output sheet row 1
+    outputRow = 2 ' Start writing to row 2 in Output sheet
     
     Dim i As Long
     For i = 2 To lastRowControl
         Dim key1 As String, key2 As String
-        key1 = wsControl.Cells(i, 1).Value ' e.g., A1
-        key2 = wsControl.Cells(i, 2).Value ' e.g., ab1
+        key1 = Trim(wsControl.Cells(i, 1).Value)
+        key2 = Trim(wsControl.Cells(i, 2).Value)
 
-        ' Step 1: Find the first row in Tab2 where Col1 = key1
-        Dim j As Long, matchRow1 As Long
-        matchRow1 = 0
-        For j = 2 To wsTab2.Cells(wsTab2.Rows.Count, 1).End(xlUp).Row
-            If wsTab2.Cells(j, 1).Value = key1 Then
-                matchRow1 = j
+        If key1 = "" Or key2 = "" Then GoTo SkipRow ' Skip empty keys
+
+        ' === Step 1: Find first non-empty row in Tab2 where col1 = key1
+        Dim matchRow1 As Long: matchRow1 = 0
+        Dim rowTab2 As Long
+        For rowTab2 = 2 To wsTab2.Rows.Count
+            If Trim(wsTab2.Cells(rowTab2, 1).Value) = key1 Then
+                matchRow1 = rowTab2
                 Exit For
             End If
-        Next j
+            If Application.CountA(wsTab2.Rows(rowTab2)) = 0 Then Exit For ' Stop at empty row
+        Next rowTab2
 
-        If matchRow1 = 0 Then GoTo SkipRow ' If not found, skip
+        If matchRow1 = 0 Then GoTo SkipRow
 
-        ' Step 2: In that row, find first column containing a "/"
-        Dim k As Long, colWithSlash As Long
+        ' === Step 2: Find first non-empty cell with "/" in the matchRow1
+        Dim colWithSlash As Long: colWithSlash = 0
         Dim header As String
-        For k = 2 To wsTab2.Cells(1, wsTab2.Columns.Count).End(xlToLeft).Column
-            If InStr(wsTab2.Cells(matchRow1, k).Value, "/") > 0 Then
-                colWithSlash = k
-                header = wsTab2.Cells(1, k).Value
+        Dim maxCol As Long
+        maxCol = wsTab2.Cells(1, wsTab2.Columns.Count).End(xlToLeft).Column
+
+        Dim colTab2 As Long
+        For colTab2 = 2 To maxCol ' Skip col 1 (ID column)
+            Dim cellVal As Variant
+            cellVal = wsTab2.Cells(matchRow1, colTab2).Value
+            If Not IsEmpty(cellVal) And InStr(cellVal, "/") > 0 Then
+                colWithSlash = colTab2
+                header = wsTab2.Cells(1, colTab2).Value
                 Exit For
             End If
-        Next k
+        Next colTab2
 
-        If colWithSlash = 0 Then GoTo SkipRow ' No "/" found
+        If colWithSlash = 0 Or header = "" Then GoTo SkipRow
 
-        ' Step 3: Find row where Col1 = key2
-        Dim matchRow2 As Long
-        matchRow2 = 0
-        For j = 2 To wsTab2.Cells(wsTab2.Rows.Count, 1).End(xlUp).Row
-            If wsTab2.Cells(j, 1).Value = key2 Then
-                matchRow2 = j
+        ' === Step 3: Find row where col1 = key2 (lookup ID)
+        Dim matchRow2 As Long: matchRow2 = 0
+        For rowTab2 = 2 To wsTab2.Rows.Count
+            If Trim(wsTab2.Cells(rowTab2, 1).Value) = key2 Then
+                matchRow2 = rowTab2
                 Exit For
             End If
-        Next j
+            If Application.CountA(wsTab2.Rows(rowTab2)) = 0 Then Exit For ' Stop at empty row
+        Next rowTab2
 
         If matchRow2 = 0 Then GoTo SkipRow
 
-        ' Step 4: Get value from row2, column = header
-        Dim colIndexHeader As Long
-        colIndexHeader = 0
-        For k = 1 To wsTab2.Cells(1, wsTab2.Columns.Count).End(xlToLeft).Column
-            If wsTab2.Cells(1, k).Value = header Then
-                colIndexHeader = k
-                Exit For
-            End If
-        Next k
-
-        If colIndexHeader = 0 Then GoTo SkipRow
-
+        ' === Step 4: Get value at [matchRow2, column with header]
         Dim val1 As Variant
-        val1 = wsTab2.Cells(matchRow2, colIndexHeader).Value
+        val1 = wsTab2.Cells(matchRow2, colWithSlash).Value
 
-        ' Step 5: Write result to Output
+        ' === Step 5: Output result
         wsOutput.Cells(outputRow, 1).Value = key1
         wsOutput.Cells(outputRow, 2).Value = key2
         wsOutput.Cells(outputRow, 3).Value = header
