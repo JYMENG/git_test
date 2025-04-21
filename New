@@ -1,32 +1,83 @@
-import pandas as pd
-import time
-import win32com.client as win32
+Sub ProcessData()
+    Dim wsControl As Worksheet, wsTab2 As Worksheet, wsOutput As Worksheet
+    Set wsControl = ThisWorkbook.Sheets("Control")
+    Set wsTab2 = ThisWorkbook.Sheets("Tab2")
+    Set wsOutput = ThisWorkbook.Sheets("Output")
+    
+    Dim lastRowControl As Long
+    lastRowControl = wsControl.Cells(wsControl.Rows.Count, 1).End(xlUp).Row
+    
+    Dim outputRow As Long
+    outputRow = 2 ' Assuming headers in Output sheet row 1
+    
+    Dim i As Long
+    For i = 2 To lastRowControl
+        Dim key1 As String, key2 As String
+        key1 = wsControl.Cells(i, 1).Value ' e.g., A1
+        key2 = wsControl.Cells(i, 2).Value ' e.g., ab1
 
-# Step 1: Setup
-excel_path = "pq_template.xlsx"
-sheet_name = "TableOutput"  # Sheet where Power Query outputs cleaned data
+        ' Step 1: Find the first row in Tab2 where Col1 = key1
+        Dim j As Long, matchRow1 As Long
+        matchRow1 = 0
+        For j = 2 To wsTab2.Cells(wsTab2.Rows.Count, 1).End(xlUp).Row
+            If wsTab2.Cells(j, 1).Value = key1 Then
+                matchRow1 = j
+                Exit For
+            End If
+        Next j
 
-# Step 2: Open Excel and refresh Power Query
-excel = win32.gencache.EnsureDispatch('Excel.Application')
-excel.Visible = False  # Set to True if you want to see it open
-workbook = excel.Workbooks.Open(excel_path)
+        If matchRow1 = 0 Then GoTo SkipRow ' If not found, skip
 
-print("Refreshing Power Query...")
-workbook.RefreshAll()
+        ' Step 2: In that row, find first column containing a "/"
+        Dim k As Long, colWithSlash As Long
+        Dim header As String
+        For k = 2 To wsTab2.Cells(1, wsTab2.Columns.Count).End(xlToLeft).Column
+            If InStr(wsTab2.Cells(matchRow1, k).Value, "/") > 0 Then
+                colWithSlash = k
+                header = wsTab2.Cells(1, k).Value
+                Exit For
+            End If
+        Next k
 
-# Wait for queries to complete
-time.sleep(2)
-while excel.CalculationState != 0:
-    time.sleep(1)
+        If colWithSlash = 0 Then GoTo SkipRow ' No "/" found
 
-print("Refresh complete.")
+        ' Step 3: Find row where Col1 = key2
+        Dim matchRow2 As Long
+        matchRow2 = 0
+        For j = 2 To wsTab2.Cells(wsTab2.Rows.Count, 1).End(xlUp).Row
+            If wsTab2.Cells(j, 1).Value = key2 Then
+                matchRow2 = j
+                Exit For
+            End If
+        Next j
 
-# Step 3: Save and close
-workbook.Save()
-workbook.Close(False)
-excel.Quit()
+        If matchRow2 = 0 Then GoTo SkipRow
 
-# Step 4: Read cleaned data and continue your logic
-df = pd.read_excel(excel_path, sheet_name=sheet_name)
-print(df.head())
-# -> now apply your col1/col2/date/value logic on this clean df
+        ' Step 4: Get value from row2, column = header
+        Dim colIndexHeader As Long
+        colIndexHeader = 0
+        For k = 1 To wsTab2.Cells(1, wsTab2.Columns.Count).End(xlToLeft).Column
+            If wsTab2.Cells(1, k).Value = header Then
+                colIndexHeader = k
+                Exit For
+            End If
+        Next k
+
+        If colIndexHeader = 0 Then GoTo SkipRow
+
+        Dim val1 As Variant
+        val1 = wsTab2.Cells(matchRow2, colIndexHeader).Value
+
+        ' Step 5: Write result to Output
+        wsOutput.Cells(outputRow, 1).Value = key1
+        wsOutput.Cells(outputRow, 2).Value = key2
+        wsOutput.Cells(outputRow, 3).Value = header
+        wsOutput.Cells(outputRow, 4).Value = val1
+        outputRow = outputRow + 1
+
+SkipRow:
+        ' Continue loop
+    Next i
+
+    MsgBox "Done!"
+End Sub
