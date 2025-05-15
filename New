@@ -1,19 +1,24 @@
 import pandas as pd
 
-# Load the Excel file
+# File name
 excel_file = "your_file.xlsx"
-xls = pd.ExcelFile(excel_file)
 
-# Parse all sheets using row 6 as header
-dataframes = [xls.parse(sheet, header=5) for sheet in xls.sheet_names]
+# Load the Excel file using openpyxl engine
+xls = pd.ExcelFile(excel_file, engine="openpyxl")
 
-# Standardize columns using the first sheet
-columns = dataframes[0].columns
-dataframes = [df for df in dataframes if not df.empty]  # Remove empty sheets if any
+# Get header from row 6 (index 5) of the first sheet
+columns = pd.read_excel(excel_file, sheet_name=xls.sheet_names[0], header=5, nrows=0, engine="openpyxl").columns
 
-# Remove headers from subsequent sheets by enforcing same columns
-combined_df = pd.concat([df for df in dataframes], ignore_index=True)
-combined_df.columns = columns  # Ensure consistent column headers
+# Read all sheets, skipping first 6 rows (header is row 6)
+dataframes = []
+for sheet in xls.sheet_names:
+    df = pd.read_excel(excel_file, sheet_name=sheet, skiprows=6, header=None, engine="openpyxl")
+    if not df.empty:
+        df.columns = columns  # Apply unified header
+        dataframes.append(df)
 
-# Save the combined result
+# Combine all data into one DataFrame
+combined_df = pd.concat(dataframes, ignore_index=True)
+
+# Save the final result
 combined_df.to_excel("combined_output.xlsx", index=False)
