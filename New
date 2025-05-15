@@ -1,95 +1,19 @@
-Sub ProcessData()
-    ' === Sheet references ===
-    Dim wsControl As Worksheet
-    Dim wsTab2 As Worksheet
-    Dim wsOutput As Worksheet
-    
-    ' === Control loop ===
-    Dim lastRowControl As Long
-    Dim i As Long
-    Dim key1 As String, key2 As String
-    
-    ' === Tab2 lookups ===
-    Dim rowTab2 As Long
-    Dim matchRow1 As Long, matchRow2 As Long
-    Dim colTab2 As Long
-    Dim colWithSlash As Long
-    Dim maxCol As Long
-    Dim header As String
-    Dim cellVal As Variant
-    Dim val1 As Variant
-    
-    ' === Output ===
-    Dim outputRow As Long
+import pandas as pd
 
-    ' === Setup ===
-    Set wsControl = ThisWorkbook.Sheets("Control")
-    Set wsTab2 = ThisWorkbook.Sheets("Tab2")
-    Set wsOutput = ThisWorkbook.Sheets("Output")
+# Load the Excel file
+excel_file = "your_file.xlsx"
+xls = pd.ExcelFile(excel_file)
 
-    lastRowControl = wsControl.Cells(wsControl.Rows.Count, 1).End(xlUp).Row
-    outputRow = 2 ' Start writing on row 2 (assuming row 1 has headers)
+# Parse all sheets using row 6 as header
+dataframes = [xls.parse(sheet, header=5) for sheet in xls.sheet_names]
 
-    ' === Main loop through Control sheet ===
-    For i = 2 To lastRowControl
-        key1 = Trim(wsControl.Cells(i, 1).Value)
-        key2 = Trim(wsControl.Cells(i, 2).Value)
+# Standardize columns using the first sheet
+columns = dataframes[0].columns
+dataframes = [df for df in dataframes if not df.empty]  # Remove empty sheets if any
 
-        If key1 = "" Or key2 = "" Then GoTo SkipRow
+# Remove headers from subsequent sheets by enforcing same columns
+combined_df = pd.concat([df for df in dataframes], ignore_index=True)
+combined_df.columns = columns  # Ensure consistent column headers
 
-        ' --- Find first matching row in Tab2 for key1 ---
-        matchRow1 = 0
-        For rowTab2 = 2 To wsTab2.Rows.Count
-            If Trim(wsTab2.Cells(rowTab2, 1).Value) = key1 Then
-                matchRow1 = rowTab2
-                Exit For
-            End If
-            If Application.CountA(wsTab2.Rows(rowTab2)) = 0 Then Exit For ' Stop at empty row
-        Next rowTab2
-
-        If matchRow1 = 0 Then GoTo SkipRow
-
-        ' --- Find first cell in that row with a "/" ---
-        colWithSlash = 0
-        header = ""
-        maxCol = wsTab2.Cells(1, wsTab2.Columns.Count).End(xlToLeft).Column
-
-        For colTab2 = 2 To maxCol
-            cellVal = wsTab2.Cells(matchRow1, colTab2).Value
-            If Not IsEmpty(cellVal) And InStr(cellVal, "/") > 0 Then
-                colWithSlash = colTab2
-                header = wsTab2.Cells(1, colTab2).Value
-                Exit For
-            End If
-        Next colTab2
-
-        If colWithSlash = 0 Or header = "" Then GoTo SkipRow
-
-        ' --- Find row where col1 = key2 ---
-        matchRow2 = 0
-        For rowTab2 = 2 To wsTab2.Rows.Count
-            If Trim(wsTab2.Cells(rowTab2, 1).Value) = key2 Then
-                matchRow2 = rowTab2
-                Exit For
-            End If
-            If Application.CountA(wsTab2.Rows(rowTab2)) = 0 Then Exit For
-        Next rowTab2
-
-        If matchRow2 = 0 Then GoTo SkipRow
-
-        ' --- Get value from Tab2 based on header ---
-        val1 = wsTab2.Cells(matchRow2, colWithSlash).Value
-
-        ' --- Write to Output sheet ---
-        wsOutput.Cells(outputRow, 1).Value = key1
-        wsOutput.Cells(outputRow, 2).Value = key2
-        wsOutput.Cells(outputRow, 3).Value = header
-        wsOutput.Cells(outputRow, 4).Value = val1
-        outputRow = outputRow + 1
-
-SkipRow:
-        ' Continue to next Control row
-    Next i
-
-    MsgBox "Done!"
-End Sub
+# Save the combined result
+combined_df.to_excel("combined_output.xlsx", index=False)
