@@ -1,27 +1,21 @@
 import pandas as pd
 
-input_file = 'input.csv'
-output_file = 'output_unique_col1.csv'
+# --- Step 1: Load files ---
+main_df = pd.read_csv("main.csv")
+other_df = pd.read_csv("other.csv")
 
-# Columns to sort by (update these)
-sort_columns = ['col1', 'col2', 'col3']
+# --- Step 2: Merge files on key columns ---
+merged_df = pd.merge(main_df, other_df, on=["key_col1", "key_col2"], how="left")
 
-# Keep track of seen 'col1' values
-seen_col1 = set()
-deduped_rows = []
+# --- Step 3: Select relevant columns ---
+df = merged_df[["key_col1", "colA", "colB", "colC"]].copy()
 
-# Process file in chunks
-for chunk in pd.read_csv(input_file, chunksize=100_000):
-    # Sort chunk
-    chunk = chunk.sort_values(by=sort_columns)
+# --- Step 4: Calculate with IF-THEN logic ---
+# colD = if colA > 100 then colB * 2 else colB + colC
+df["colD"] = df.apply(lambda row: row["colB"] * 2 if row["colA"] > 100 else row["colB"] + row["colC"], axis=1)
 
-    # Drop duplicates within chunk
-    for _, row in chunk.iterrows():
-        key = row['col1']
-        if key not in seen_col1:
-            seen_col1.add(key)
-            deduped_rows.append(row)
+# colE = 'High' if colD > 200 else 'Low'
+df["colE"] = df["colD"].apply(lambda x: "High" if x > 200 else "Low")
 
-# Final DataFrame and output
-result_df = pd.DataFrame(deduped_rows)
-result_df.to_csv(output_file, index=False)
+# --- Step 5: Output selected columns ---
+df[["key_col1", "colD", "colE"]].to_csv("output.csv", index=False)
