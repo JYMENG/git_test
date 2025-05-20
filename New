@@ -1,32 +1,27 @@
-import os
 import pandas as pd
 
-folder_path = '/your/folder/path'
-columns_to_use = ['col1', 'col2']
-seen = set()
+input_file = 'input.csv'
+output_file = 'output_unique_col1.csv'
+
+# Columns to sort by (update these)
+sort_columns = ['col1', 'col2', 'col3']
+
+# Keep track of seen 'col1' values
+seen_col1 = set()
 deduped_rows = []
 
-files = sorted([
-    f for f in os.listdir(folder_path)
-    if f.lower().endswith('.csv')
-])
+# Process file in chunks
+for chunk in pd.read_csv(input_file, chunksize=100_000):
+    # Sort chunk
+    chunk = chunk.sort_values(by=sort_columns)
 
-for filename in files:
-    full_path = os.path.join(folder_path, filename)
-    try:
-        for chunk in pd.read_csv(full_path, usecols=columns_to_use, chunksize=100_000):
-            # Drop duplicates within chunk first
-            chunk = chunk.drop_duplicates(subset=columns_to_use, keep='first')
-            
-            # Filter out already seen rows
-            for _, row in chunk.iterrows():
-                key = tuple(row[col] for col in columns_to_use)
-                if key not in seen:
-                    seen.add(key)
-                    deduped_rows.append(row)
-    except Exception as e:
-        print(f"Error reading {filename}: {e}")
+    # Drop duplicates within chunk
+    for _, row in chunk.iterrows():
+        key = row['col1']
+        if key not in seen_col1:
+            seen_col1.add(key)
+            deduped_rows.append(row)
 
-# Convert to final DataFrame
-final_df = pd.DataFrame(deduped_rows, columns=columns_to_use)
-print(final_df)
+# Final DataFrame and output
+result_df = pd.DataFrame(deduped_rows)
+result_df.to_csv(output_file, index=False)
