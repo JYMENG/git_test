@@ -1,21 +1,33 @@
-import pandas as pd
+import os
+import re
+from datetime import datetime
 
-# --- Step 1: Load files ---
-main_df = pd.read_csv("main.csv")
-other_df = pd.read_csv("other.csv")
+# Folder path
+folder_path = 'your/folder/path'
 
-# --- Step 2: Merge files on key columns ---
-merged_df = pd.merge(main_df, other_df, on=["key_col1", "key_col2"], how="left")
+# Regex to extract mm-dd-yyyy
+date_pattern = re.compile(r'(\d{2})-(\d{2})-(\d{4})')
 
-# --- Step 3: Select relevant columns ---
-df = merged_df[["key_col1", "colA", "colB", "colC"]].copy()
+def extract_date_from_filename(filename):
+    match = date_pattern.search(filename)
+    if match:
+        mm, dd, yyyy = match.groups()
+        return datetime.strptime(f"{mm}-{dd}-{yyyy}", "%m-%d-%Y")
+    return None
 
-# --- Step 4: Calculate with IF-THEN logic ---
-# colD = if colA > 100 then colB * 2 else colB + colC
-df["colD"] = df.apply(lambda row: row["colB"] * 2 if row["colA"] > 100 else row["colB"] + row["colC"], axis=1)
+# List and sort files with valid dates
+files_with_dates = []
+for file in os.listdir(folder_path):
+    date = extract_date_from_filename(file)
+    if date:
+        files_with_dates.append((file, date))
 
-# colE = 'High' if colD > 200 else 'Low'
-df["colE"] = df["colD"].apply(lambda x: "High" if x > 200 else "Low")
+# Sort by date
+files_with_dates.sort(key=lambda x: x[1])
 
-# --- Step 5: Output selected columns ---
-df[["key_col1", "colD", "colE"]].to_csv("output.csv", index=False)
+# Get sorted filenames
+sorted_files = [file for file, _ in files_with_dates]
+
+# Example: print sorted filenames
+for f in sorted_files:
+    print(f)
