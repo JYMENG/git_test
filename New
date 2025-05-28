@@ -1,33 +1,26 @@
-import os
-import re
-from datetime import datetime
+import pandas as pd
 
-# Folder path
-folder_path = 'your/folder/path'
+# Sample DataFrame
+df = pd.DataFrame({
+    'colA': [1, 2, 3],
+    'colB': ['a', 'b', 'c'],
+    'colC': [10.1, 10.2, 10.3],
+    'colD': ['x', 'y', 'z']
+})
 
-# Regex to extract mm-dd-yyyy
-date_pattern = re.compile(r'(\d{2})-(\d{2})-(\d{4})')
+# Specify the columns you want in order
+columns_to_output = ['colB', 'colA', 'colD']
 
-def extract_date_from_filename(filename):
-    match = date_pattern.search(filename)
-    if match:
-        mm, dd, yyyy = match.groups()
-        return datetime.strptime(f"{mm}-{dd}-{yyyy}", "%m-%d-%Y")
-    return None
+# Rename columns if needed
+rename_map = {
+    'colB': 'Category',
+    'colA': 'ID',
+    'colD': 'Label'
+}
 
-# List and sort files with valid dates
-files_with_dates = []
-for file in os.listdir(folder_path):
-    date = extract_date_from_filename(file)
-    if date:
-        files_with_dates.append((file, date))
+# Apply selection and renaming
+output_df = df[columns_to_output].rename(columns=rename_map)
 
-# Sort by date
-files_with_dates.sort(key=lambda x: x[1])
-
-# Get sorted filenames
-sorted_files = [file for file, _ in files_with_dates]
-
-# Example: print sorted filenames
-for f in sorted_files:
-    print(f)
+# Print or export
+print(output_df)
+# output_df.to_csv('output.csv', index=False)
