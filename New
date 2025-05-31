@@ -1,26 +1,25 @@
-import pandas as pd
+@echo off
+setlocal
 
-# Sample DataFrame
-df = pd.DataFrame({
-    'colA': [1, 2, 3],
-    'colB': ['a', 'b', 'c'],
-    'colC': [10.1, 10.2, 10.3],
-    'colD': ['x', 'y', 'z']
-})
+:: Ask for user input
+set /p userInput=Enter the input string:
 
-# Specify the columns you want in order
-columns_to_output = ['colB', 'colA', 'colD']
+:: Set paths
+set sourceFolder=C:\path\to\source
+set targetFolder=C:\path\to\target
 
-# Rename columns if needed
-rename_map = {
-    'colB': 'Category',
-    'colA': 'ID',
-    'colD': 'Label'
-}
+:: Delete files in target folder with prefix + user input
+echo Deleting files in %targetFolder% that match: prefix_%userInput%*
+del "%targetFolder%\prefix_%userInput%*"
 
-# Apply selection and renaming
-output_df = df[columns_to_output].rename(columns=rename_map)
+:: Move a file from source to target and rename with user input as suffix
+:: (adjust source filename pattern as needed)
+for %%f in ("%sourceFolder%\somefile.*") do (
+    set "filename=%%~nf"
+    set "extension=%%~xf"
+    call set "newname=%%filename%%_%userInput%%%extension%%"
+    move "%%f" "%targetFolder%\!newname!"
+)
 
-# Print or export
-print(output_df)
-# output_df.to_csv('output.csv', index=False)
+endlocal
+pause
