@@ -1,25 +1,22 @@
-@echo off
-setlocal
+%macro upcase_vars(lib=work, data=your_dataset);
 
-:: Ask for user input
-set /p userInput=Enter the input string:
+    proc sql noprint;
+        select name, cats(name, "=", upcase(name))
+        into :varlist separated by ' ',
+             :renames separated by ' '
+        from dictionary.columns
+        where libname = upcase("&lib.") and memname = upcase("&data.");
+    quit;
 
-:: Set paths
-set sourceFolder=C:\path\to\source
-set targetFolder=C:\path\to\target
+    data &lib..&data;
+        set &lib..&data;
+    run;
 
-:: Delete files in target folder with prefix + user input
-echo Deleting files in %targetFolder% that match: prefix_%userInput%*
-del "%targetFolder%\prefix_%userInput%*"
+    proc datasets lib=&lib nolist;
+        modify &data;
+        rename &renames;
+    quit;
 
-:: Move a file from source to target and rename with user input as suffix
-:: (adjust source filename pattern as needed)
-for %%f in ("%sourceFolder%\somefile.*") do (
-    set "filename=%%~nf"
-    set "extension=%%~xf"
-    call set "newname=%%filename%%_%userInput%%%extension%%"
-    move "%%f" "%targetFolder%\!newname!"
-)
+%mend;
 
-endlocal
-pause
+%upcase_vars(lib=work, data=mydata);  /* Replace 'mydata' with your dataset name */
