@@ -1,113 +1,54 @@
-import pandas as pd
-from ldap3 import Server, Connection, ALL, SUBTREE
-from collections import deque
+Import-Module ActiveDirectory
 
-def get_users_recursive(group_dn, conn, seen_groups):
-    users = []
-    queue = deque([group_dn])
+# Load groups from CSV/Excel
+$groups = Import-Csv -Path "groups.csv"  # Columns: GroupName, Server
 
-    while queue:
-        current_group = queue.popleft()
-        if current_group in seen_groups:
-            continue
-        seen_groups.add(current_group)
+# Keep track of seen users
+$allUsers = @()
 
-        conn.search(search_base=current_group,
-                    search_filter='(objectClass=group)',
-                    search_scope=SUBTREE,
-                    attributes=['member'])
+foreach ($entry in $groups) {
+    $groupName = $entry.GroupName
+    $server = $entry.Server
 
-        for entry in conn.entries:
-            members = entry.member.values if 'member' in entry else []
-            for member_dn in members:
-                conn.search(search_base=member_dn,
-                            search_filter='(objectClass=*)',
-                            search_scope=SUBTREE,
-                            attributes=['objectClass', 'cn', 'sAMAccountName', 'mail'])
+    Write-Host "Processing group '$groupName' on server '$server'"
 
-                if not conn.entries:
-                    continue
+    try {
+        $seenGroups = @{}
 
-                entry_obj = conn.entries[0]
-                classes = entry_obj.objectClass.values
-
-                if 'user' in classes:
-                    users.append({
-                        'CN': str(entry_obj.cn),
-                        'sAMAccountName': str(entry_obj.sAMAccountName),
-                        'Email': str(entry_obj.mail) if 'mail' in entry_obj else '',
-                        'DN': member_dn
-                    })
-                elif 'group' in classes:
-                    queue.append(member_dn)
-
-    return users
-
-def main():
-    df = pd.read_excel('groups.xlsx')
-    all_results = []
-
-    for _, row in df.iterrows():
-        group_name = row['GroupName']
-        server = row['Server']
-        username = row.get('Username', None)
-        password = row.get('Password', None)
-
-        print(f"🔍 Connecting to {server} for group '{group_name}'...")
-
-        try:
-            srv = Server(server, get_info=ALL)
-
-            if pd.notna(username) and pd.notna(password):
-                conn = Connection(srv, user=username, password=password, auto_bind=True)
-            else:
-                conn = Connection(srv, auto_bind=True)  # Anonymous or integrated
-
-            # Automatically get base DN
-            base_dn = conn.server.info.other['defaultNamingContext'][0]
-
-            # Try exact match first
-            found = conn.search(
-                search_base=base_dn,
-                search_filter=f'(&(objectClass=group)(cn={group_name}))',
-                search_scope=SUBTREE,
-                attributes=['distinguishedName']
+        function Get-GroupUsersRecursive {
+            param (
+                [string]$GroupName,
+                [string]$Server
             )
 
-            if not found or not conn.entries:
-                print(f"❗ Group '{group_name}' not found, trying wildcard...")
-                conn.search(
-                    search_base=base_dn,
-                    search_filter=f'(&(objectClass=group)(cn=*{group_name}*))',
-                    search_scope=SUBTREE,
-                    attributes=['distinguishedName']
-                )
+            if ($seenGroups.ContainsKey($GroupName)) { return }
+            $seenGroups[$GroupName] = $true
 
-            if not conn.entries:
-                print(f"❌ Group '{group_name}' not found on server '{server}'")
-                continue
+            $members = Get-ADGroupMember -Identity $GroupName -Server $Server -ErrorAction Stop
+            foreach ($member in $members) {
+                if ($member.objectClass -eq "user") {
+                    $user = Get-ADUser -Identity $member.DistinguishedName -Server $Server -Properties DisplayName, EmailAddress
+                    $script:allUsers += [PSCustomObject]@{
+                        GroupName      = $GroupName
+                        Server         = $Server
+                        UserName       = $user.SamAccountName
+                        DisplayName    = $user.DisplayName
+                        Email          = $user.EmailAddress
+                        DN             = $user.DistinguishedName
+                    }
+                } elseif ($member.objectClass -eq "group") {
+                    Get-GroupUsersRecursive -GroupName $member.Name -Server $Server
+                }
+            }
+        }
 
-            group_dn = conn.entries[0].distinguishedName.value
-            seen = set()
-            users = get_users_recursive(group_dn, conn, seen)
+        Get-GroupUsersRecursive -GroupName $groupName -Server $server
 
-            for user in users:
-                user['Group'] = group_name
-                user['Server'] = server
+    } catch {
+        Write-Warning "❌ Failed to get group '$groupName' on server '$server': $_"
+    }
+}
 
-            all_results.extend(users)
-            conn.unbind()
-
-        except Exception as e:
-            print(f"❌ Failed to connect to {server} or search group '{group_name}': {e}")
-
-    # Export all users
-    if all_results:
-        df_out = pd.DataFrame(all_results)
-        df_out.to_csv('ad_group_users.csv', index=False)
-        print("✅ Exported all user records to 'ad_group_users.csv'")
-    else:
-        print("⚠️ No user data was extracted.")
-
-if __name__ == "__main__":
-    main()
+# Export results
+$allUsers | Export-Csv -Path "AD_Users_Recursive.csv" -NoTypeInformation
+Write-Host "✅ Export complete!"
