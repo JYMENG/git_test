@@ -1,4 +1,4 @@
-Import-Module ActiveDirectory
+do Import-Module ActiveDirectory
 
 # Load groups from CSV/Excel
 $groups = Import-Csv -Path "groups.csv"  # Columns: GroupName, Server
@@ -51,4 +51,5 @@ foreach ($entry in $groups) {
 
 # Export results
 $allUsers | Export-Csv -Path "AD_Users_Recursive.csv" -NoTypeInformation
-Write-Host "✅ Export complete!"
+Write-Host "✅ Export Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+
