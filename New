@@ -1,4 +1,10 @@
-Import-Module ActiveDirectory
+
+Set-ExecutionPolicy Bypass -Scope Process -Force
+.\get_ad_users_recursive.ps1
+
+
+
+ Import-Module ActiveDirectory
 Import-Module ImportExcel
 
 # Load Excel group list
