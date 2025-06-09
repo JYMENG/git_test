@@ -1,55 +1,78 @@
-do Import-Module ActiveDirectory
+Import-Module ActiveDirectory
+Import-Module ImportExcel
 
-# Load groups from CSV/Excel
-$groups = Import-Csv -Path "groups.csv"  # Columns: GroupName, Server
+# Load Excel group list
+$groups = Import-Excel -Path "groups.xlsx"
 
-# Keep track of seen users
 $allUsers = @()
 
-foreach ($entry in $groups) {
-    $groupName = $entry.GroupName
-    $server = $entry.Server
+foreach ($row in $groups) {
+    $groupName = $row.GroupName
+    $server = $row.Server
 
-    Write-Host "Processing group '$groupName' on server '$server'"
+    if (-not $groupName -or -not $server) {
+        Write-Warning "⚠️ Skipping row with missing GroupName or Server."
+        continue
+    }
 
-    try {
-        $seenGroups = @{}
+    Write-Host "🔍 Processing group '$groupName' on server '$server'"
 
-        function Get-GroupUsersRecursive {
-            param (
-                [string]$GroupName,
-                [string]$Server
-            )
+    $seenGroups = @{}
 
-            if ($seenGroups.ContainsKey($GroupName)) { return }
-            $seenGroups[$GroupName] = $true
+    function Get-GroupUsersRecursive {
+        param (
+            [string]$GroupName,
+            [string]$Server
+        )
 
+        if ($seenGroups.ContainsKey($GroupName)) { return }
+        $seenGroups[$GroupName] = $true
+
+        try {
             $members = Get-ADGroupMember -Identity $GroupName -Server $Server -ErrorAction Stop
-            foreach ($member in $members) {
-                if ($member.objectClass -eq "user") {
-                    $user = Get-ADUser -Identity $member.DistinguishedName -Server $Server -Properties DisplayName, EmailAddress
-                    $script:allUsers += [PSCustomObject]@{
-                        GroupName      = $GroupName
-                        Server         = $Server
-                        UserName       = $user.SamAccountName
-                        DisplayName    = $user.DisplayName
-                        Email          = $user.EmailAddress
-                        DN             = $user.DistinguishedName
-                    }
-                } elseif ($member.objectClass -eq "group") {
-                    Get-GroupUsersRecursive -GroupName $member.Name -Server $Server
-                }
-            }
+        } catch {
+            Write-Warning "❌ Cannot get members of $GroupName: $_"
+            return
         }
 
-        Get-GroupUsersRecursive -GroupName $groupName -Server $server
+        foreach ($member in $members) {
+            $entry = [PSCustomObject]@{
+                Group             = $GroupName
+                Server            = $Server
+                Name              = $member.Name
+                ObjectClass       = $member.ObjectClass
+                SamAccountName    = ''
+                Email             = ''
+                DistinguishedName = $member.DistinguishedName
+                Note              = ''
+            }
 
-    } catch {
-        Write-Warning "❌ Failed to get group '$groupName' on server '$server': $_"
+            if ($member.objectClass -eq 'user') {
+                try {
+                    $user = Get-ADUser -Identity $member.DistinguishedName -Server $Server -Properties EmailAddress
+                    $entry.SamAccountName = $user.SamAccountName
+                    $entry.Email = $user.EmailAddress
+                } catch {
+                    $entry.Note = "⚠️ Cannot read user info"
+                }
+            }
+            elseif ($member.objectClass -eq 'group') {
+                # recurse
+                Get-GroupUsersRecursive -GroupName $member.Name -Server $Server
+                continue
+            }
+            else {
+                # ForeignSecurityPrincipal, computer, etc.
+                $entry.Note = "Non-user/group object (e.g., $($member.objectClass))"
+            }
+
+            $script:allUsers += $entry
+        }
     }
+
+    Get-GroupUsersRecursive -GroupName $groupName -Server $server
 }
 
-# Export results
-$allUsers | Export-Csv -Path "AD_Users_Recursive.csv" -NoTypeInformation
-Write-Host "✅ Export Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-
+# Export to CSV
+$allUsers | Export-Csv -Path "AD_Users_Recursive_WithNotes.csv" -NoTypeInformation
+Write-Host "✅ Exported results to 'AD_Users_Recursive_WithNotes.csv'"
