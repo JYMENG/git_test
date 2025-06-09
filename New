@@ -1,7 +1,86 @@
-let
-    Source = Excel.CurrentWorkbook(){[Name="Table1"]}[Content],
-    Grouped = Table.Group(Source, {"Key"}, {
-        {"Combined", each Text.Combine([Value], ", "), type text}
-    })
-in
-    Grouped
+import pandas as pd
+from ldap3 import Server, Connection, ALL, SUBTREE
+from collections import deque
+
+def get_users_recursive(group_dn, conn, seen_groups):
+    users = []
+    queue = deque([group_dn])
+
+    while queue:
+        current_group = queue.popleft()
+        if current_group in seen_groups:
+            continue
+        seen_groups.add(current_group)
+
+        conn.search(search_base=current_group,
+                    search_filter='(objectClass=group)',
+                    search_scope=SUBTREE,
+                    attributes=['member'])
+
+        for entry in conn.entries:
+            members = entry.member.values if 'member' in entry else []
+            for member_dn in members:
+                conn.search(search_base=member_dn,
+                            search_filter='(objectClass=*)',
+                            search_scope=SUBTREE,
+                            attributes=['objectClass', 'cn', 'sAMAccountName', 'mail'])
+
+                if not conn.entries:
+                    continue
+
+                entry_obj = conn.entries[0]
+                classes = entry_obj.objectClass.values
+
+                if 'user' in classes:
+                    users.append({
+                        'CN': str(entry_obj.cn),
+                        'sAMAccountName': str(entry_obj.sAMAccountName),
+                        'Email': str(entry_obj.mail) if 'mail' in entry_obj else '',
+                        'DN': member_dn
+                    })
+                elif 'group' in classes:
+                    queue.append(member_dn)
+
+    return users
+
+# Load group list from Excel
+df = pd.read_excel('groups.xlsx')
+
+all_results = []
+
+for _, row in df.iterrows():
+    group_name = row['GroupName']
+    server = row['Server']
+    
+    print(f"Processing group '{group_name}' on server '{server}'")
+
+    try:
+        srv = Server(server, get_info=ALL)
+        conn = Connection(srv, auto_bind=True)
+
+        # Search for group DN
+        conn.search(search_base='dc=mycompany,dc=com',
+                    search_filter=f'(&(objectClass=group)(cn={group_name}))',
+                    search_scope=SUBTREE,
+                    attributes=['distinguishedName'])
+
+        if not conn.entries:
+            print(f"Group {group_name} not found.")
+            continue
+
+        group_dn = conn.entries[0].distinguishedName.value
+        seen = set()
+        users = get_users_recursive(group_dn, conn, seen)
+        for u in users:
+            u['Group'] = group_name
+            u['Server'] = server
+
+        all_results.extend(users)
+        conn.unbind()
+
+    except Exception as e:
+        print(f"Failed for group '{group_name}': {e}")
+
+# Export to CSV
+pd.DataFrame(all_results).to_csv('ad_group_users.csv', index=False)
+print("✅ Exported all users to 'ad_group_users.csv'")
