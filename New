@@ -43,44 +43,71 @@ def get_users_recursive(group_dn, conn, seen_groups):
 
     return users
 
-# Load group list from Excel
-df = pd.read_excel('groups.xlsx')
+def main():
+    df = pd.read_excel('groups.xlsx')
+    all_results = []
 
-all_results = []
+    for _, row in df.iterrows():
+        group_name = row['GroupName']
+        server = row['Server']
+        username = row.get('Username', None)
+        password = row.get('Password', None)
 
-for _, row in df.iterrows():
-    group_name = row['GroupName']
-    server = row['Server']
-    
-    print(f"Processing group '{group_name}' on server '{server}'")
+        print(f"🔍 Connecting to {server} for group '{group_name}'...")
 
-    try:
-        srv = Server(server, get_info=ALL)
-        conn = Connection(srv, auto_bind=True)
+        try:
+            srv = Server(server, get_info=ALL)
 
-        # Search for group DN
-        conn.search(search_base='dc=mycompany,dc=com',
-                    search_filter=f'(&(objectClass=group)(cn={group_name}))',
+            if pd.notna(username) and pd.notna(password):
+                conn = Connection(srv, user=username, password=password, auto_bind=True)
+            else:
+                conn = Connection(srv, auto_bind=True)  # Anonymous or integrated
+
+            # Automatically get base DN
+            base_dn = conn.server.info.other['defaultNamingContext'][0]
+
+            # Try exact match first
+            found = conn.search(
+                search_base=base_dn,
+                search_filter=f'(&(objectClass=group)(cn={group_name}))',
+                search_scope=SUBTREE,
+                attributes=['distinguishedName']
+            )
+
+            if not found or not conn.entries:
+                print(f"❗ Group '{group_name}' not found, trying wildcard...")
+                conn.search(
+                    search_base=base_dn,
+                    search_filter=f'(&(objectClass=group)(cn=*{group_name}*))',
                     search_scope=SUBTREE,
-                    attributes=['distinguishedName'])
+                    attributes=['distinguishedName']
+                )
 
-        if not conn.entries:
-            print(f"Group {group_name} not found.")
-            continue
+            if not conn.entries:
+                print(f"❌ Group '{group_name}' not found on server '{server}'")
+                continue
 
-        group_dn = conn.entries[0].distinguishedName.value
-        seen = set()
-        users = get_users_recursive(group_dn, conn, seen)
-        for u in users:
-            u['Group'] = group_name
-            u['Server'] = server
+            group_dn = conn.entries[0].distinguishedName.value
+            seen = set()
+            users = get_users_recursive(group_dn, conn, seen)
 
-        all_results.extend(users)
-        conn.unbind()
+            for user in users:
+                user['Group'] = group_name
+                user['Server'] = server
 
-    except Exception as e:
-        print(f"Failed for group '{group_name}': {e}")
+            all_results.extend(users)
+            conn.unbind()
 
-# Export to CSV
-pd.DataFrame(all_results).to_csv('ad_group_users.csv', index=False)
-print("✅ Exported all users to 'ad_group_users.csv'")
+        except Exception as e:
+            print(f"❌ Failed to connect to {server} or search group '{group_name}': {e}")
+
+    # Export all users
+    if all_results:
+        df_out = pd.DataFrame(all_results)
+        df_out.to_csv('ad_group_users.csv', index=False)
+        print("✅ Exported all user records to 'ad_group_users.csv'")
+    else:
+        print("⚠️ No user data was extracted.")
+
+if __name__ == "__main__":
+    main()
