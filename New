@@ -1,1 +1,7 @@
-Get-AzureADGroupMember -ObjectId "<Group-Object-ID>"
+let
+    Source = Excel.CurrentWorkbook(){[Name="Table1"]}[Content],
+    Grouped = Table.Group(Source, {"Key"}, {
+        {"Combined", each Text.Combine([Value], ", "), type text}
+    })
+in
+    Grouped
