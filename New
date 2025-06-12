@@ -1,35 +1,36 @@
 Import-Module ActiveDirectory
 Import-Module ImportExcel
 
+# Load Excel with columns: GroupName | Server
 $groups = Import-Excel -Path "groups.xlsx"
-$allUsers = @()
+$allMembers = @()
 
-function Expand-ADGroupMembers {
+function Expand-ADGroup {
     param (
-        [string]$CurrentGroupDN,
+        [string]$GroupDN,
         [string]$Server,
         [string]$RootGroup,
         [string]$ParentGroup,
         [hashtable]$seenGroups
     )
 
-    if ($seenGroups.ContainsKey($CurrentGroupDN)) { return }
-    $seenGroups[$CurrentGroupDN] = $true
+    if ($seenGroups.ContainsKey($GroupDN)) { return }
+    $seenGroups[$GroupDN] = $true
 
-    # Get group object and its members
-    $groupObj = Get-ADObject -Identity $CurrentGroupDN -Server $Server -Properties member -ErrorAction Continue
+    # Get member list via direct LDAP attribute (to avoid Get-ADGroupMember failures)
+    $groupObj = Get-ADObject -Identity $GroupDN -Server $Server -Properties member -ErrorAction SilentlyContinue
 
     if (-not $groupObj) {
-        $allUsers += ,([PSCustomObject]@{
+        $allMembers += ,([PSCustomObject]@{
             RootGroup         = $RootGroup
             ParentGroup       = $ParentGroup
             Server            = $Server
-            Name              = $CurrentGroupDN
+            Name              = $GroupDN
             ObjectClass       = 'group'
             SamAccountName    = ''
             Email             = ''
-            DistinguishedName = $CurrentGroupDN
-            Note              = "❌ Failed to get group object: $($Error[0].Exception.Message)"
+            DistinguishedName = $GroupDN
+            Note              = "❌ Cannot read group"
         })
         return
     }
@@ -47,45 +48,46 @@ function Expand-ADGroupMembers {
             Note              = ''
         }
 
-        $obj = Get-ADObject -Identity $memberDN -Server $Server -Properties objectClass -ErrorAction Continue
+        $obj = Get-ADObject -Identity $memberDN -Server $Server -Properties objectClass -ErrorAction SilentlyContinue
 
         if (-not $obj) {
-            $entry.Note = "⚠️ Cannot resolve member: $($Error[0].Exception.Message)"
-            $allUsers += ,$entry
+            $entry.Note = "⚠️ Could not resolve object"
+            $allMembers += ,$entry
             continue
         }
 
-        $objectClass = $obj.objectClass[-1]
-        $entry.ObjectClass = $objectClass
+        $class = $obj.objectClass[-1]
+        $entry.ObjectClass = $class
         $entry.Name = $obj.Name
 
-        switch ($objectClass) {
+        switch ($class) {
             'user' {
-                $user = Get-ADUser -Identity $memberDN -Server $Server -Properties EmailAddress -ErrorAction Continue
+                $user = Get-ADUser -Identity $memberDN -Server $Server -Properties EmailAddress -ErrorAction SilentlyContinue
                 if ($user) {
                     $entry.SamAccountName = $user.SamAccountName
                     $entry.Email = $user.EmailAddress
                 } else {
-                    $entry.Note = "⚠️ Get-ADUser failed: $($Error[0].Exception.Message)"
+                    $entry.Note = "⚠️ Could not get user info"
                 }
-                $allUsers += ,$entry
+                $allMembers += ,$entry
             }
 
             'group' {
                 $entry.Note = "✅ Nested group"
-                $allUsers += ,$entry
-                Expand-ADGroupMembers -CurrentGroupDN $memberDN -Server $Server -RootGroup $RootGroup -ParentGroup $obj.Name -seenGroups $seenGroups
+                $allMembers += ,$entry
+                Expand-ADGroup -GroupDN $memberDN -Server $Server -RootGroup $RootGroup -ParentGroup $obj.Name -seenGroups $seenGroups
             }
 
             default {
-                $entry.Note = "⚠️ Unknown object class: $objectClass"
-                $allUsers += ,$entry
+                # Cyber accounts (ForeignSecurityPrincipal), computer, etc.
+                $entry.Note = "⚠️ Non-user/group object ($class)"
+                $allMembers += ,$entry
             }
         }
     }
 }
 
-# MAIN LOOP
+# Loop through input Excel
 foreach ($row in $groups) {
     $groupName = $row.GroupName
     $server = $row.Server
@@ -95,21 +97,20 @@ foreach ($row in $groups) {
         continue
     }
 
-    Write-Host "`n🔍 Processing group '$groupName' on server '$server'..."
+    Write-Host "`n🔍 Processing root group '$groupName' on '$server'..."
 
-    # Resolve group to DN first
-    $groupObj = Get-ADGroup -Identity $groupName -Server $server -Properties DistinguishedName -ErrorAction Continue
+    $groupObj = Get-ADGroup -Identity $groupName -Server $server -Properties DistinguishedName -ErrorAction SilentlyContinue
 
     if (-not $groupObj) {
-        Write-Warning "❌ Could not resolve group '$groupName' to DN on $server"
+        Write-Warning "❌ Could not resolve group '$groupName' to DN"
         continue
     }
 
     $groupDN = $groupObj.DistinguishedName
     $seenGroups = @{}
-    Expand-ADGroupMembers -CurrentGroupDN $groupDN -Server $server -RootGroup $groupName -ParentGroup $groupName -seenGroups $seenGroups
+    Expand-ADGroup -GroupDN $groupDN -Server $server -RootGroup $groupName -ParentGroup $groupName -seenGroups $seenGroups
 }
 
-# Export final results
-$allUsers | Export-Csv -Path "AD_Users_Recursive_Fixed.csv" -NoTypeInformation
-Write-Host "`n✅ Export complete: AD_Users_Recursive_Fixed.csv"
+# Export results
+$allMembers | Export-Csv -Path "AD_Recursive_Members_WithCyberAccounts.csv" -NoTypeInformation
+Write-Host "`n✅ Export complete: AD_Recursive_Members_WithCyberAccounts.csv"
