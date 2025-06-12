@@ -1,16 +1,15 @@
 Import-Module ActiveDirectory
 Import-Module ImportExcel
 
-# Load Excel with columns: GroupName | Server
 $groups = Import-Excel -Path "groups.xlsx"
 $allUsers = @()
 
-# Recursive function
 function Get-GroupUsersRecursive {
     param (
         [string]$CurrentGroup,
         [string]$Server,
         [hashtable]$seenGroups,
+        [string]$RootGroup,
         [string]$ParentGroup
     )
 
@@ -20,63 +19,72 @@ function Get-GroupUsersRecursive {
     try {
         $members = Get-ADGroupMember -Identity $CurrentGroup -Server $Server -ErrorAction Stop
     } catch {
-        Write-Warning "❌ Cannot get members of group '$CurrentGroup' on server '$Server': $_"
-        return  # skip this group, but don't stop outer loop
+        $allUsers += [PSCustomObject]@{
+            RootGroup         = $RootGroup
+            ParentGroup       = $ParentGroup
+            Server            = $Server
+            Name              = $CurrentGroup
+            ObjectClass       = "group"
+            SamAccountName    = ""
+            Email             = ""
+            DistinguishedName = ""
+            Note              = "❌ Cannot read group members"
+        }
+        return
     }
 
     foreach ($member in $members) {
-        $dn = $member.DistinguishedName
         $entry = [PSCustomObject]@{
-            RootGroup         = $ParentGroup
+            RootGroup         = $RootGroup
             ParentGroup       = $CurrentGroup
             Server            = $Server
             Name              = $member.Name
             ObjectClass       = $member.ObjectClass
             SamAccountName    = ''
             Email             = ''
-            DistinguishedName = $dn
+            DistinguishedName = $member.DistinguishedName
             Note              = ''
         }
 
-        # Skip invalid/foreign/trusted objects
+        $dn = $member.DistinguishedName
+
+        # Handle foreign or broken objects
         if ($dn -like '*CN=ForeignSecurityPrincipals*') {
             $entry.Note = "⚠️ ForeignSecurityPrincipal - external/trusted object"
-            $script:allUsers += $entry
+            $allUsers += $entry
             continue
         }
 
-        if ($member.objectClass -eq 'user') {
-            try {
-                $user = Get-ADUser -Identity $dn -Server $Server -Properties EmailAddress
-                $entry.SamAccountName = $user.SamAccountName
-                $entry.Email = $user.EmailAddress
-            } catch {
-                $entry.Note = "⚠️ Cannot resolve user"
+        switch ($member.objectClass) {
+            'user' {
+                try {
+                    $user = Get-ADUser -Identity $dn -Server $Server -Properties EmailAddress
+                    $entry.SamAccountName = $user.SamAccountName
+                    $entry.Email = $user.EmailAddress
+                } catch {
+                    $entry.Note = "⚠️ Cannot resolve user"
+                }
+                $allUsers += $entry
             }
-            $script:allUsers += $entry
-        }
-        elseif ($member.objectClass -eq 'group') {
-            try {
-                # Log the group itself
-                $entry.Note = "✅ Nested group processed"
-                $script:allUsers += $entry
 
-                # Recurse into the nested group
-                Get-GroupUsersRecursive -CurrentGroup $member.Name -Server $Server -seenGroups $seenGroups -ParentGroup $CurrentGroup
-            } catch {
-                $entry.Note = "⚠️ Cannot access nested group"
-                $script:allUsers += $entry
-                continue
+            'group' {
+                # Log this group entry
+                $entry.Note = "✅ Nested group discovered"
+                $allUsers += $entry
+
+                # Recurse into it separately
+                Get-GroupUsersRecursive -CurrentGroup $member.Name -Server $Server -seenGroups $seenGroups -RootGroup $RootGroup -ParentGroup $CurrentGroup
             }
-        }
-        else {
-            $entry.Note = "⚠️ Unsupported object class: $($member.objectClass)"
-            $script:allUsers += $entry
+
+            default {
+                $entry.Note = "⚠️ Unsupported object class: $($member.objectClass)"
+                $allUsers += $entry
+            }
         }
     }
 }
 
-# Loop through root groups in Excel
+# Main loop for each root group in Excel
 foreach ($row in $groups) {
     $rootGroup = $row.GroupName
     $server = $row.Server
@@ -86,12 +94,12 @@ foreach ($row in $groups) {
         continue
     }
 
-    Write-Host "🔍 Processing group '$rootGroup' on server '$server'"
+    Write-Host "`n🔍 Processing root group '$rootGroup' on server '$server'"
 
     $seenGroups = @{}
-    Get-GroupUsersRecursive -CurrentGroup $rootGroup -Server $server -seenGroups $seenGroups -ParentGroup $rootGroup
+    Get-GroupUsersRecursive -CurrentGroup $rootGroup -Server $server -seenGroups $seenGroups -RootGroup $rootGroup -ParentGroup $rootGroup
 }
 
 # Export to CSV
 $allUsers | Export-Csv -Path "AD_Users_Recursive_WithNotes.csv" -NoTypeInformation
-Write-Host "✅ Export complete: AD_Users_Recursive_WithNotes.csv"
+Write-Host "`n✅ Export complete: AD_Users_Recursive_WithNotes.csv"
