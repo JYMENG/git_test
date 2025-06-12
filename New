@@ -5,6 +5,65 @@ Import-Module ImportExcel
 $groups = Import-Excel -Path "groups.xlsx"
 $allUsers = @()
 
+# Recursive function defined outside the loop
+function Get-GroupUsersRecursive {
+    param (
+        [string]$GroupName,
+        [string]$Server,
+        [hashtable]$seenGroups
+    )
+
+    if ($seenGroups.ContainsKey($GroupName)) { return }
+    $seenGroups[$GroupName] = $true
+
+    try {
+        $members = Get-ADGroupMember -Identity $GroupName -Server $Server -ErrorAction Stop
+    } catch {
+        Write-Warning "❌ Cannot get members of $GroupName: $_"
+        return
+    }
+
+    foreach ($member in $members) {
+        $dn = $member.DistinguishedName
+        $entry = [PSCustomObject]@{
+            Group             = $GroupName
+            Server            = $Server
+            Name              = $member.Name
+            ObjectClass       = $member.ObjectClass
+            SamAccountName    = ''
+            Email             = ''
+            DistinguishedName = $dn
+            Note              = ''
+        }
+
+        # Skip foreign/trusted objects
+        if ($dn -like '*CN=ForeignSecurityPrincipals*') {
+            $entry.Note = "⚠️ External object (ForeignSecurityPrincipal)"
+            $script:allUsers += $entry
+            continue
+        }
+
+        if ($member.objectClass -eq 'user') {
+            try {
+                $user = Get-ADUser -Identity $dn -Server $Server -Properties EmailAddress
+                $entry.SamAccountName = $user.SamAccountName
+                $entry.Email = $user.EmailAddress
+            } catch {
+                $entry.Note = "⚠️ Cannot resolve user"
+            }
+        } elseif ($member.objectClass -eq 'group') {
+            # Recurse
+            Get-GroupUsersRecursive -GroupName $member.Name -Server $Server -seenGroups $seenGroups
+            continue
+        } else {
+            $entry.Note = "⚠️ Unknown or unsupported object class: $($member.objectClass)"
+        }
+
+        $script:allUsers += $entry
+    }
+}
+
+# Loop through each group in Excel
 foreach ($row in $groups) {
     $groupName = $row.GroupName
     $server = $row.Server
@@ -17,64 +76,7 @@ foreach ($row in $groups) {
     Write-Host "🔍 Processing group '$groupName' on server '$server'"
 
     $seenGroups = @{}
-
-    function Get-GroupUsersRecursive {
-        param (
-            [string]$GroupName,
-            [string]$Server
-        )
-
-        if ($seenGroups.ContainsKey($GroupName)) { return }
-        $seenGroups[$GroupName] = $true
-
-        try {
-            $members = Get-ADGroupMember -Identity $GroupName -Server $Server -ErrorAction Stop
-        } catch {
-            Write-Warning "❌ Cannot get members of $GroupName: $_"
-            return
-        }
-
-        foreach ($member in $members) {
-            $dn = $member.DistinguishedName
-            $entry = [PSCustomObject]@{
-                Group             = $GroupName
-                Server            = $Server
-                Name              = $member.Name
-                ObjectClass       = $member.ObjectClass
-                SamAccountName    = ''
-                Email             = ''
-                DistinguishedName = $dn
-                Note              = ''
-            }
-
-            # Skip problematic or external objects
-            if ($dn -like '*CN=ForeignSecurityPrincipals*') {
-                $entry.Note = "⚠️ External object (ForeignSecurityPrincipal)"
-                $script:allUsers += $entry
-                continue
-            }
-
-            if ($member.objectClass -eq 'user') {
-                try {
-                    $user = Get-ADUser -Identity $dn -Server $Server -Properties EmailAddress
-                    $entry.SamAccountName = $user.SamAccountName
-                    $entry.Email = $user.EmailAddress
-                } catch {
-                    $entry.Note = "⚠️ Cannot resolve user"
-                }
-            } elseif ($member.objectClass -eq 'group') {
-                # Recurse into nested group
-                Get-GroupUsersRecursive -GroupName $member.Name -Server $Server
-                continue
-            } else {
-                $entry.Note = "⚠️ Unknown or unsupported object class: $($member.objectClass)"
-            }
-
-            $script:allUsers += $entry
-        }
-    }
-
-    Get-GroupUsersRecursive -GroupName $groupName -Server $server
+    Get-GroupUsersRecursive -GroupName $groupName -Server $server -seenGroups $seenGroups
 }
 
 # Export to CSV
