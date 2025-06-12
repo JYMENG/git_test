@@ -5,7 +5,7 @@ Import-Module ImportExcel
 $groups = Import-Excel -Path "groups.xlsx"
 $allUsers = @()
 
-# Recursive function (defined once, outside loop)
+# Recursive function
 function Get-GroupUsersRecursive {
     param (
         [string]$CurrentGroup,
@@ -20,15 +20,15 @@ function Get-GroupUsersRecursive {
     try {
         $members = Get-ADGroupMember -Identity $CurrentGroup -Server $Server -ErrorAction Stop
     } catch {
-        Write-Warning "❌ Cannot get members of $CurrentGroup: $_"
-        return
+        Write-Warning "❌ Cannot get members of group '$CurrentGroup' on server '$Server': $_"
+        return  # skip this group, but don't stop outer loop
     }
 
     foreach ($member in $members) {
         $dn = $member.DistinguishedName
         $entry = [PSCustomObject]@{
-            RootGroup         = $ParentGroup   # Top-level group from Excel
-            ParentGroup       = $CurrentGroup  # This group where the member was found
+            RootGroup         = $ParentGroup
+            ParentGroup       = $CurrentGroup
             Server            = $Server
             Name              = $member.Name
             ObjectClass       = $member.ObjectClass
@@ -38,9 +38,9 @@ function Get-GroupUsersRecursive {
             Note              = ''
         }
 
-        # Handle external/trusted users
+        # Skip invalid/foreign/trusted objects
         if ($dn -like '*CN=ForeignSecurityPrincipals*') {
-            $entry.Note = "⚠️ External object (ForeignSecurityPrincipal)"
+            $entry.Note = "⚠️ ForeignSecurityPrincipal - external/trusted object"
             $script:allUsers += $entry
             continue
         }
@@ -53,19 +53,30 @@ function Get-GroupUsersRecursive {
             } catch {
                 $entry.Note = "⚠️ Cannot resolve user"
             }
-        } elseif ($member.objectClass -eq 'group') {
-            # Recurse into subgroup
-            Get-GroupUsersRecursive -CurrentGroup $member.Name -Server $Server -seenGroups $seenGroups -ParentGroup $ParentGroup
-            continue
-        } else {
-            $entry.Note = "⚠️ Unsupported object class: $($member.objectClass)"
+            $script:allUsers += $entry
         }
+        elseif ($member.objectClass -eq 'group') {
+            try {
+                # Log the group itself
+                $entry.Note = "✅ Nested group processed"
+                $script:allUsers += $entry
 
-        $script:allUsers += $entry
+                # Recurse into the nested group
+                Get-GroupUsersRecursive -CurrentGroup $member.Name -Server $Server -seenGroups $seenGroups -ParentGroup $CurrentGroup
+            } catch {
+                $entry.Note = "⚠️ Cannot access nested group"
+                $script:allUsers += $entry
+                continue
+            }
+        }
+        else {
+            $entry.Note = "⚠️ Unsupported object class: $($member.objectClass)"
+            $script:allUsers += $entry
+        }
     }
 }
 
-# Loop through each root group from Excel
+# Loop through root groups in Excel
 foreach ($row in $groups) {
     $rootGroup = $row.GroupName
     $server = $row.Server
