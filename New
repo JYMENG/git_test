@@ -1,6 +1,7 @@
 Import-Module ActiveDirectory
 Import-Module ImportExcel
 
+# Load Excel with columns: GroupName | Server
 $groups = Import-Excel -Path "groups.xlsx"
 $allUsers = @()
 
@@ -46,7 +47,7 @@ foreach ($row in $groups) {
                 Note              = ''
             }
 
-            # Detect external/trusted domain objects
+            # Skip problematic or external objects
             if ($dn -like '*CN=ForeignSecurityPrincipals*') {
                 $entry.Note = "⚠️ External object (ForeignSecurityPrincipal)"
                 $script:allUsers += $entry
@@ -62,6 +63,7 @@ foreach ($row in $groups) {
                     $entry.Note = "⚠️ Cannot resolve user"
                 }
             } elseif ($member.objectClass -eq 'group') {
+                # Recurse into nested group
                 Get-GroupUsersRecursive -GroupName $member.Name -Server $Server
                 continue
             } else {
@@ -75,6 +77,6 @@ foreach ($row in $groups) {
     Get-GroupUsersRecursive -GroupName $groupName -Server $server
 }
 
-# Export
+# Export to CSV
 $allUsers | Export-Csv -Path "AD_Users_Recursive_WithNotes.csv" -NoTypeInformation
 Write-Host "✅ Export complete: AD_Users_Recursive_WithNotes.csv"
