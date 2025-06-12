@@ -16,11 +16,11 @@ function Expand-ADGroupMembers {
     if ($seenGroups.ContainsKey($CurrentGroupDN)) { return }
     $seenGroups[$CurrentGroupDN] = $true
 
-    # Get group's member attribute directly
-    try {
-        $groupObj = Get-ADObject -Identity $CurrentGroupDN -Server $Server -Properties member -ErrorAction Stop
-    } catch {
-        $allUsers += [PSCustomObject]@{
+    # Get group object and its members
+    $groupObj = Get-ADObject -Identity $CurrentGroupDN -Server $Server -Properties member -ErrorAction Continue
+
+    if (-not $groupObj) {
+        $allUsers += ,([PSCustomObject]@{
             RootGroup         = $RootGroup
             ParentGroup       = $ParentGroup
             Server            = $Server
@@ -29,13 +29,12 @@ function Expand-ADGroupMembers {
             SamAccountName    = ''
             Email             = ''
             DistinguishedName = $CurrentGroupDN
-            Note              = "❌ Cannot get group object"
-        }
+            Note              = "❌ Failed to get group object: $($Error[0].Exception.Message)"
+        })
         return
     }
 
     foreach ($memberDN in $groupObj.member) {
-        # Try to get the object's class first
         $entry = [PSCustomObject]@{
             RootGroup         = $RootGroup
             ParentGroup       = $ParentGroup
@@ -48,38 +47,39 @@ function Expand-ADGroupMembers {
             Note              = ''
         }
 
-        try {
-            $obj = Get-ADObject -Identity $memberDN -Server $Server -Properties objectClass -ErrorAction Stop
-            $objectClass = $obj.objectClass[-1]
-            $entry.ObjectClass = $objectClass
-            $entry.Name = $obj.Name
-        } catch {
-            $entry.Note = "⚠️ Broken or external object"
-            $allUsers += $entry
+        $obj = Get-ADObject -Identity $memberDN -Server $Server -Properties objectClass -ErrorAction Continue
+
+        if (-not $obj) {
+            $entry.Note = "⚠️ Cannot resolve member: $($Error[0].Exception.Message)"
+            $allUsers += ,$entry
             continue
         }
 
+        $objectClass = $obj.objectClass[-1]
+        $entry.ObjectClass = $objectClass
+        $entry.Name = $obj.Name
+
         switch ($objectClass) {
             'user' {
-                try {
-                    $user = Get-ADUser -Identity $memberDN -Server $Server -Properties EmailAddress
+                $user = Get-ADUser -Identity $memberDN -Server $Server -Properties EmailAddress -ErrorAction Continue
+                if ($user) {
                     $entry.SamAccountName = $user.SamAccountName
                     $entry.Email = $user.EmailAddress
-                } catch {
-                    $entry.Note = "⚠️ Cannot resolve user"
+                } else {
+                    $entry.Note = "⚠️ Get-ADUser failed: $($Error[0].Exception.Message)"
                 }
-                $allUsers += $entry
+                $allUsers += ,$entry
             }
 
             'group' {
-                $entry.Note = "✅ Nested group discovered"
-                $allUsers += $entry
+                $entry.Note = "✅ Nested group"
+                $allUsers += ,$entry
                 Expand-ADGroupMembers -CurrentGroupDN $memberDN -Server $Server -RootGroup $RootGroup -ParentGroup $obj.Name -seenGroups $seenGroups
             }
 
             default {
-                $entry.Note = "⚠️ Unsupported object class: $objectClass"
-                $allUsers += $entry
+                $entry.Note = "⚠️ Unknown object class: $objectClass"
+                $allUsers += ,$entry
             }
         }
     }
@@ -87,28 +87,29 @@ function Expand-ADGroupMembers {
 
 # MAIN LOOP
 foreach ($row in $groups) {
-    $rootGroup = $row.GroupName
+    $groupName = $row.GroupName
     $server = $row.Server
 
-    if (-not $rootGroup -or -not $server) {
-        Write-Warning "⚠️ Skipping row with missing GroupName or Server."
+    if (-not $groupName -or -not $server) {
+        Write-Warning "⚠️ Skipping row with missing GroupName or Server"
         continue
     }
 
-    Write-Host "`n🔍 Processing root group '$rootGroup' on server '$server'"
+    Write-Host "`n🔍 Processing group '$groupName' on server '$server'..."
 
-    try {
-        $rootGroupObj = Get-ADGroup -Identity $rootGroup -Server $server -Properties DistinguishedName
-        $rootGroupDN = $rootGroupObj.DistinguishedName
-    } catch {
-        Write-Warning "❌ Root group '$rootGroup' not found on server '$server'"
+    # Resolve group to DN first
+    $groupObj = Get-ADGroup -Identity $groupName -Server $server -Properties DistinguishedName -ErrorAction Continue
+
+    if (-not $groupObj) {
+        Write-Warning "❌ Could not resolve group '$groupName' to DN on $server"
         continue
     }
 
+    $groupDN = $groupObj.DistinguishedName
     $seenGroups = @{}
-    Expand-ADGroupMembers -CurrentGroupDN $rootGroupDN -Server $server -RootGroup $rootGroup -ParentGroup $rootGroup -seenGroups $seenGroups
+    Expand-ADGroupMembers -CurrentGroupDN $groupDN -Server $server -RootGroup $groupName -ParentGroup $groupName -seenGroups $seenGroups
 }
 
-# Export
-$allUsers | Export-Csv -Path "AD_Users_Robust_WithNotes.csv" -NoTypeInformation
-Write-Host "`n✅ Export complete: AD_Users_Robust_WithNotes.csv"
+# Export final results
+$allUsers | Export-Csv -Path "AD_Users_Recursive_Fixed.csv" -NoTypeInformation
+Write-Host "`n✅ Export complete: AD_Users_Recursive_Fixed.csv"
