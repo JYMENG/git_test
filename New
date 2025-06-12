@@ -16,7 +16,7 @@ function Expand-ADGroup {
     if ($seenGroups.ContainsKey($GroupDN)) { return }
     $seenGroups[$GroupDN] = $true
 
-    $groupObj = Get-ADObject -Identity $GroupDN -Server $Server -Properties member -ErrorAction SilentlyContinue
+    $groupObj = Get-ADObject -Identity "$GroupDN" -Server $Server -Properties member -ErrorAction SilentlyContinue
 
     if (-not $groupObj) {
         $allMembers += ,([PSCustomObject]@{
@@ -46,44 +46,43 @@ function Expand-ADGroup {
             Note              = ''
         }
 
-        $obj = Get-ADObject -Identity $memberDN -Server $Server -Properties objectClass -ErrorAction SilentlyContinue
-        if (-not $obj) {
-            $entry.Note = "⚠️ Could not resolve object"
+        # Determine actual object type
+        if (Get-ADUser -Identity "$memberDN" -Server $Server -ErrorAction SilentlyContinue) {
+            $entry.ObjectClass = 'user'
+            $user = Get-ADUser -Identity "$memberDN" -Server $Server -Properties SamAccountName, EmailAddress -ErrorAction SilentlyContinue
+            if ($user) {
+                $entry.Name = $user.Name
+                $entry.SamAccountName = $user.SamAccountName
+                $entry.Email = $user.EmailAddress
+            } else {
+                $entry.Note = "⚠️ Could not retrieve user details"
+            }
             $allMembers += ,$entry
-            continue
         }
+        elseif (Get-ADGroup -Identity "$memberDN" -Server $Server -ErrorAction SilentlyContinue) {
+            $entry.ObjectClass = 'group'
+            $group = Get-ADGroup -Identity "$memberDN" -Server $Server -ErrorAction SilentlyContinue
+            $entry.Name = $group.Name
+            $entry.Note = "✅ Nested group"
+            $allMembers += ,$entry
 
-        $class = $obj.objectClass[-1]
-        $entry.ObjectClass = $class
-        $entry.Name = $obj.Name
-
-        switch ($class) {
-            'user' {
-                $user = Get-ADUser -Identity $memberDN -Server $Server -Properties EmailAddress -ErrorAction SilentlyContinue
-                if ($user) {
-                    $entry.SamAccountName = $user.SamAccountName
-                    $entry.Email = $user.EmailAddress
-                } else {
-                    $entry.Note = "⚠️ Could not get user info"
-                }
-                $allMembers += ,$entry
+            # Recurse
+            Expand-ADGroup -GroupDN "$memberDN" -Server $Server -RootGroup $RootGroup -ParentGroup $group.Name -seenGroups $seenGroups
+        }
+        else {
+            # ForeignSecurityPrincipal or unknown object
+            $obj = Get-ADObject -Identity "$memberDN" -Server $Server -Properties Name -ErrorAction SilentlyContinue
+            if ($obj) {
+                $entry.Name = $obj.Name
             }
-
-            'group' {
-                $entry.Note = "✅ Nested group"
-                $allMembers += ,$entry
-                Expand-ADGroup -GroupDN $memberDN -Server $Server -RootGroup $RootGroup -ParentGroup $obj.Name -seenGroups $seenGroups
-            }
-
-            default {
-                $entry.Note = "⚠️ Non-user/group object ($class)"
-                $allMembers += ,$entry
-            }
+            $entry.ObjectClass = 'other'
+            $entry.Note = "⚠️ Unclassified or external object"
+            $allMembers += ,$entry
         }
     }
 }
 
-# MAIN loop — resolve GroupName to DN first
+# MAIN LOOP
 foreach ($row in $groups) {
     $groupName = $row.GroupName
     $server = $row.Server
@@ -93,12 +92,12 @@ foreach ($row in $groups) {
         continue
     }
 
-    Write-Host "`n🔍 Resolving group '$groupName' on $server..."
+    Write-Host "`n🔍 Resolving group '$groupName' on server '$server'..."
 
-    $resolved = Get-ADGroup -Identity $groupName -Server $server -Properties DistinguishedName -ErrorAction SilentlyContinue
+    $resolved = Get-ADGroup -Identity "$groupName" -Server $server -Properties DistinguishedName -ErrorAction SilentlyContinue
 
     if (-not $resolved) {
-        Write-Warning "❌ Could not resolve '$groupName' on $server"
+        Write-Warning "❌ Could not resolve group '$groupName' on '$server'"
         continue
     }
 
@@ -106,9 +105,9 @@ foreach ($row in $groups) {
     Write-Host "➡️  Resolved to DN: $groupDN"
 
     $seenGroups = @{}
-    Expand-ADGroup -GroupDN $groupDN -Server $server -RootGroup $groupName -ParentGroup $groupName -seenGroups $seenGroups
+    Expand-ADGroup -GroupDN "$groupDN" -Server $server -RootGroup $groupName -ParentGroup $groupName -seenGroups $seenGroups
 }
 
-# Export all results
+# Export results
 $allMembers | Export-Csv -Path "AD_Recursive_Members_Final.csv" -NoTypeInformation
 Write-Host "`n✅ Export complete: AD_Recursive_Members_Final.csv"
