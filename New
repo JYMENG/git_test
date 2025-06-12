@@ -1,7 +1,6 @@
 Import-Module ActiveDirectory
 Import-Module ImportExcel
 
-# Load Excel with columns: GroupName | Server
 $groups = Import-Excel -Path "groups.xlsx"
 $allMembers = @()
 
@@ -17,7 +16,6 @@ function Expand-ADGroup {
     if ($seenGroups.ContainsKey($GroupDN)) { return }
     $seenGroups[$GroupDN] = $true
 
-    # Get member list via direct LDAP attribute (to avoid Get-ADGroupMember failures)
     $groupObj = Get-ADObject -Identity $GroupDN -Server $Server -Properties member -ErrorAction SilentlyContinue
 
     if (-not $groupObj) {
@@ -30,7 +28,7 @@ function Expand-ADGroup {
             SamAccountName    = ''
             Email             = ''
             DistinguishedName = $GroupDN
-            Note              = "❌ Cannot read group"
+            Note              = "❌ Cannot read group object"
         })
         return
     }
@@ -49,7 +47,6 @@ function Expand-ADGroup {
         }
 
         $obj = Get-ADObject -Identity $memberDN -Server $Server -Properties objectClass -ErrorAction SilentlyContinue
-
         if (-not $obj) {
             $entry.Note = "⚠️ Could not resolve object"
             $allMembers += ,$entry
@@ -79,7 +76,6 @@ function Expand-ADGroup {
             }
 
             default {
-                # Cyber accounts (ForeignSecurityPrincipal), computer, etc.
                 $entry.Note = "⚠️ Non-user/group object ($class)"
                 $allMembers += ,$entry
             }
@@ -87,7 +83,7 @@ function Expand-ADGroup {
     }
 }
 
-# Loop through input Excel
+# MAIN loop — resolve GroupName to DN first
 foreach ($row in $groups) {
     $groupName = $row.GroupName
     $server = $row.Server
@@ -97,20 +93,22 @@ foreach ($row in $groups) {
         continue
     }
 
-    Write-Host "`n🔍 Processing root group '$groupName' on '$server'..."
+    Write-Host "`n🔍 Resolving group '$groupName' on $server..."
 
-    $groupObj = Get-ADGroup -Identity $groupName -Server $server -Properties DistinguishedName -ErrorAction SilentlyContinue
+    $resolved = Get-ADGroup -Identity $groupName -Server $server -Properties DistinguishedName -ErrorAction SilentlyContinue
 
-    if (-not $groupObj) {
-        Write-Warning "❌ Could not resolve group '$groupName' to DN"
+    if (-not $resolved) {
+        Write-Warning "❌ Could not resolve '$groupName' on $server"
         continue
     }
 
-    $groupDN = $groupObj.DistinguishedName
+    $groupDN = $resolved.DistinguishedName
+    Write-Host "➡️  Resolved to DN: $groupDN"
+
     $seenGroups = @{}
     Expand-ADGroup -GroupDN $groupDN -Server $server -RootGroup $groupName -ParentGroup $groupName -seenGroups $seenGroups
 }
 
-# Export results
-$allMembers | Export-Csv -Path "AD_Recursive_Members_WithCyberAccounts.csv" -NoTypeInformation
-Write-Host "`n✅ Export complete: AD_Recursive_Members_WithCyberAccounts.csv"
+# Export all results
+$allMembers | Export-Csv -Path "AD_Recursive_Members_Final.csv" -NoTypeInformation
+Write-Host "`n✅ Export complete: AD_Recursive_Members_Final.csv"
