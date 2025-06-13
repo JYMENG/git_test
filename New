@@ -1,8 +1,14 @@
-# Define your input Excel or CSV path
-$inputFile = "C:\Path\To\Your\File.xlsx"
-$groups = Import-Excel -Path $inputFile  # Use Import-Csv if needed
+# Load the required module
+# Install-Module -Name ImportExcel -Scope CurrentUser -Force
+# If Excel not available, use CSV (see notes below)
 
-# Recursive function to walk nested group members
+$inputFile = "C:\Path\To\Your\Groups.xlsx"  # Adjust path
+$csvOutput = "C:\Temp\AllMembers_WithPaths.csv"  # Adjust export path
+
+# Read Excel file with GroupName and ServerName columns
+$groups = Import-Excel -Path $inputFile
+
+# Recursive function to retrieve members
 function Get-ADGroupRecursiveMembers {
     param (
         [string]$GroupDN,
@@ -25,23 +31,27 @@ function Get-ADGroupRecursiveMembers {
 
     foreach ($memberDN in $group.Members) {
         try {
-            $member = Get-ADObject -Identity $memberDN -Server $Server -Properties objectClass
+            $member = Get-ADObject -Identity $memberDN -Server $Server -Properties objectClass,sAMAccountName,mail
             if ($member.objectClass -eq "group") {
+                # Recurse into nested group
                 Get-ADGroupRecursiveMembers -GroupDN $memberDN -Server $Server -VisitedGroups $VisitedGroups -PathSoFar ($PathSoFar + $GroupDN)
             } else {
+                # Return member object
                 [PSCustomObject]@{
-                    GroupPath  = ($PathSoFar + $GroupDN) -join " -> "
-                    MemberDN   = $memberDN
-                    ObjectType = $member.objectClass
+                    GroupPath      = ($PathSoFar + $GroupDN) -join " -> "
+                    MemberDN       = $memberDN
+                    ObjectType     = $member.objectClass
+                    sAMAccountName = $member.sAMAccountName
+                    Email          = $member.mail
                 }
             }
         } catch {
-            Write-Warning "Skipping inaccessible or external member: $memberDN"
+            Write-Warning "Skipping inaccessible or external member (e.g. FSP): $memberDN"
         }
     }
 }
 
-# Collect all results
+# Result storage
 $allResults = @()
 
 foreach ($entry in $groups) {
@@ -52,11 +62,19 @@ foreach ($entry in $groups) {
         $rootGroup = Get-ADGroup -Identity $groupName -Server $serverName
         $visited   = New-Object 'System.Collections.Generic.HashSet[string]'
         $members   = Get-ADGroupRecursiveMembers -GroupDN $rootGroup.DistinguishedName -Server $serverName -VisitedGroups $visited -PathSoFar @()
-        $allResults += $members
+
+        if ($members) {
+            $allResults += $members
+        } else {
+            Write-Warning "No members found for group: $groupName"
+        }
     } catch {
-        Write-Warning "Failed to process group: $groupName on $serverName"
+        Write-Warning "Failed to get root group: $groupName on $serverName"
     }
 }
 
-# Output results
-$allResults | Export-Csv "C:\Path\To\AllMembers_WithPaths.csv" -NoTypeInformation
+Write-Host "Total members collected: $($allResults.Count)"
+
+# Export results to CSV
+$allResults | Export-Csv -Path $csvOutput -NoTypeInformation -Encoding UTF8
+Write-Host "Export complete: $csvOutput"
