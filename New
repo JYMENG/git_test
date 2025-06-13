@@ -1,9 +1,9 @@
-# --- CONFIGURATION ---
+# Configuration
 $GroupName = "Hr Team"
 $Server = "yourdc.domain.com"
 $OutputFile = "C:\Temp\AD_Export.csv"
 
-# --- RECURSION USING COLLECTOR ---
+# Recursive function using a safe collector
 function Get-GroupMembersSafe {
     param (
         [string]$GroupDN,
@@ -56,7 +56,7 @@ function Get-GroupMembersSafe {
     }
 }
 
-# --- MAIN EXECUTION ---
+# Main execution
 try {
     $rootGroup = Get-ADGroup -Identity $GroupName -Server $Server
     $visited = [System.Collections.Generic.HashSet[string]]::new()
@@ -65,15 +65,15 @@ try {
     Get-GroupMembersSafe -GroupDN $rootGroup.DistinguishedName -Server $Server -Visited $visited -PathSoFar @() -Collector $collected
 
     $collected[0] | Format-List
-    $collected[0].GetType().FullName  # MUST be PSCustomObject
+    $collected[0].GetType().FullName
 
     if ($collected.Count -gt 0) {
         Remove-Item $OutputFile -ErrorAction SilentlyContinue
         $collected | Export-Csv -Path $OutputFile -NoTypeInformation -Encoding UTF8
-        Write-Host "`n✅ Exported to: $OutputFile"
+        Write-Host "Exported to: $OutputFile"
         Start-Process $OutputFile
     } else {
-        Write-Warning "⚠ No members collected."
+        Write-Warning "No members found."
     }
 
 } catch {
