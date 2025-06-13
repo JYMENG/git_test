@@ -113,5 +113,9 @@ if ($allResults.Count -gt 0) {
     $allResults | Export-Csv -Path $OutputFile -NoTypeInformation -Encoding UTF8
     Write-Host "📄 Exported results to: $OutputFile"
 } else {
-    Write-Warning "⚠ No results to export"
+    Write-Warning "⚠ No results to $allResults.Count
+$allResults | Format-Table -AutoSize
+$allResults | Export-Csv -Path "C:\Temp\Test_Export.csv" -NoTypeInformation -Encoding UTF8
+Start-Process "C:\Temp\Test_Export.csv"
+
 }
