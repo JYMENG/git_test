@@ -1,28 +1,9 @@
-param (
-    [string]$InputFile = "C:\Path\To\Your\Groups.xlsx",
-    [string]$OutputFile = "C:\Temp\Members_WithPaths.csv"
-)
+# CONFIGURATION
+$GroupName = "Hr Team"
+$Server = "yourdc.domain.com"
+$OutputFile = "C:\Temp\AD_Export.csv"
 
-# Ensure Excel import module exists
-if (-not (Get-Module -ListAvailable -Name ImportExcel)) {
-    Write-Error "ImportExcel module is required. Run: Install-Module ImportExcel"
-    return
-}
-
-# Read Excel
-if (-not (Test-Path $InputFile)) {
-    Write-Error "Input file does not exist: $InputFile"
-    return
-}
-
-$groupList = Import-Excel -Path $InputFile
-
-if ($groupList.Count -eq 0) {
-    Write-Error "Excel file has no rows"
-    return
-}
-
-# Recursive member function
+# FUNCTION
 function Get-ADGroupRecursiveMembers {
     param (
         [string]$GroupDN,
@@ -42,7 +23,7 @@ function Get-ADGroupRecursiveMembers {
     try {
         $group = Get-ADGroup -Identity $GroupDN -Server $Server -Properties Members
     } catch {
-        Write-Warning "Failed to load group: $GroupDN - $_"
+        Write-Warning "Failed to access group: $GroupDN"
         return $results
     }
 
@@ -50,23 +31,23 @@ function Get-ADGroupRecursiveMembers {
         try {
             $member = Get-ADObject -Identity $memberDN -Server $Server -Properties objectClass, sAMAccountName, mail
         } catch {
-            Write-Warning "Skipping inaccessible member: $memberDN"
+            Write-Warning "Skipping member: $memberDN"
             continue
         }
 
         if ($member.objectClass -eq "group") {
-            $nestedResults = Get-ADGroupRecursiveMembers -GroupDN $memberDN -Server $Server -VisitedGroups $VisitedGroups -PathSoFar ($PathSoFar + $GroupDN)
-            $results += $nestedResults
+            $nested = Get-ADGroupRecursiveMembers -GroupDN $memberDN -Server $Server -VisitedGroups $VisitedGroups -PathSoFar ($PathSoFar + $GroupDN)
+            if ($nested) { $results += $nested }
         } elseif ($member.objectClass -eq "foreignSecurityPrincipal") {
-            $results += [pscustomobject]@{
+            $results += [PSCustomObject]@{
                 GroupPath      = ($PathSoFar + $GroupDN) -join " -> "
                 MemberDN       = $memberDN
                 ObjectType     = "FSP"
-                sAMAccountName = $null
-                Email          = $null
+                sAMAccountName = ""
+                Email          = ""
             }
         } else {
-            $results += [pscustomobject]@{
+            $results += [PSCustomObject]@{
                 GroupPath      = ($PathSoFar + $GroupDN) -join " -> "
                 MemberDN       = $memberDN
                 ObjectType     = $member.objectClass
@@ -79,43 +60,28 @@ function Get-ADGroupRecursiveMembers {
     return $results
 }
 
-# Main result list
-$allResults = @()
+# MAIN
+try {
+    $rootGroup = Get-ADGroup -Identity $GroupName -Server $Server
+    $visited = [System.Collections.Generic.HashSet[string]]::new()
+    $results = Get-ADGroupRecursiveMembers -GroupDN $rootGroup.DistinguishedName -Server $Server -VisitedGroups $visited -PathSoFar @()
 
-foreach ($row in $groupList) {
-    $groupName = $row.GroupName
-    $serverName = $row.ServerName
+    Write-Host "`n✅ Total members: $($results.Count)"
+    
+    # Confirm structure
+    $results[0] | Format-List
+    $results[0] | Get-Member
 
-    if (-not $groupName -or -not $serverName) {
-        Write-Warning "Skipping row with missing group or server"
-        continue
+    # Export safely
+    if ($results.Count -gt 0) {
+        Remove-Item $OutputFile -ErrorAction SilentlyContinue
+        $results | Export-Csv -Path $OutputFile -NoTypeInformation -Encoding UTF8
+        Write-Host "`n📄 Export complete: $OutputFile"
+        Start-Process $OutputFile
+    } else {
+        Write-Warning "No members to export"
     }
 
-    try {
-        $rootGroup = Get-ADGroup -Identity $groupName -Server $serverName
-        $visited = New-Object 'System.Collections.Generic.HashSet[string]'
-        $members = Get-ADGroupRecursiveMembers -GroupDN $rootGroup.DistinguishedName -Server $serverName -VisitedGroups $visited -PathSoFar @()
-        
-        if ($members.Count -gt 0) {
-            $allResults += $members
-            Write-Host "✅ Group '$groupName' returned $($members.Count) members"
-        } else {
-            Write-Warning "⚠ Group '$groupName' had no members"
-        }
-    } catch {
-        Write-Warning "❌ Failed to load group: $groupName from $Write-Host "📦 Previewing first item:"
-$first = $allResults | Select-Object -First 1
-$first | Format-List
-$first.GetType().FullName
-
-# Export result
-if ($allResults.Count -gt 0) {
-    $allResults | Export-Csv -Path $OutputFile -NoTypeInformation -Encoding UTF8
-    Write-Host "📄 Exported results to: $OutputFile"
-} else {
-    Write-Warning "⚠ No results to $allResults.Count
-$allResults | Format-Table -AutoSize
-$allResults | Export-Csv -Path "C:\Temp\Test_Export.csv" -NoTypeInformation -Encoding UTF8
-Start-Process "C:\Temp\Test_Export.csv"
-
+} catch {
+    Write-Error "Fatal error: $_"
 }
