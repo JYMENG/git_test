@@ -1,16 +1,81 @@
-function ReturnObjects {
-    $list = @()
-    $list += [PSCustomObject]@{
-        Name = "Alice"
-        Age  = 30
+# === CONFIGURATION ===
+$GroupName = "Hr Team"
+$Server = "yourdc.domain.com"
+$OutputFile = "C:\Temp\AD_Export.csv"
+
+# === CLEAN FUNCTION ===
+function Get-GroupMembersRecursive {
+    param (
+        [string]$GroupDN,
+        [string]$Server,
+        [System.Collections.Generic.HashSet[string]]$Visited,
+        [string[]]$PathSoFar
+    )
+
+    $members = @()
+
+    if ($Visited.Contains($GroupDN)) {
+        return $members
     }
-    $list += [PSCustomObject]@{
-        Name = "Bob"
-        Age  = 40
+
+    $Visited.Add($GroupDN)
+
+    try {
+        $group = Get-ADGroup -Identity $GroupDN -Server $Server -Properties Members
+    } catch {
+        Write-Warning "❌ Cannot get group: $GroupDN"
+        return $members
     }
-    return $list
+
+    foreach ($dn in $group.Members) {
+        try {
+            $obj = Get-ADObject -Identity $dn -Server $Server -Properties objectClass,sAMAccountName,mail
+        } catch {
+            continue
+        }
+
+        if ($obj.objectClass -eq "group") {
+            $nested = Get-GroupMembersRecursive -GroupDN $dn -Server $Server -Visited $Visited -PathSoFar ($PathSoFar + $GroupDN)
+            if ($nested) { $members += $nested }
+        } elseif ($obj.objectClass -eq "foreignSecurityPrincipal") {
+            $members += [PSCustomObject]@{
+                GroupPath      = ($PathSoFar + $GroupDN) -join " -> "
+                MemberDN       = $dn
+                ObjectType     = "FSP"
+                sAMAccountName = ""
+                Email          = ""
+            }
+        } else {
+            $members += [PSCustomObject]@{
+                GroupPath      = ($PathSoFar + $GroupDN) -join " -> "
+                MemberDN       = $dn
+                ObjectType     = $obj.objectClass
+                sAMAccountName = $obj.sAMAccountName
+                Email          = $obj.mail
+            }
+        }
+    }
+
+    return $members
 }
 
-$result = ReturnObjects
-$result | Format-Table
-$result[0].GetType().FullName
+# === MAIN ===
+try {
+    $root = Get-ADGroup -Identity $GroupName -Server $Server
+    $visited = [System.Collections.Generic.HashSet[string]]::new()
+    $results = Get-GroupMembersRecursive -GroupDN $root.DistinguishedName -Server $Server -Visited $visited -PathSoFar @()
+
+    $results[0] | Format-List
+    $results[0].GetType().FullName  # ✅ Should be PSCustomObject
+
+    if ($results.Count -gt 0) {
+        Remove-Item $OutputFile -ErrorAction SilentlyContinue
+        $results | Export-Csv -Path $OutputFile -NoTypeInformation -Encoding UTF8
+        Start-Process $OutputFile
+    } else {
+        Write-Warning "⚠ No members to export."
+    }
+
+} catch {
+    Write-Error "❌ Fatal: $_"
+}
