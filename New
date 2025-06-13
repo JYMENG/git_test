@@ -1,39 +1,62 @@
-function Get-AllADGroupMembers {
+# Define your input Excel or CSV path
+$inputFile = "C:\Path\To\Your\File.xlsx"
+$groups = Import-Excel -Path $inputFile  # Use Import-Csv if needed
+
+# Recursive function to walk nested group members
+function Get-ADGroupRecursiveMembers {
     param (
-        [Parameter(Mandatory=$true)]
-        [string]$GroupName
+        [string]$GroupDN,
+        [string]$Server,
+        [System.Collections.Generic.HashSet[string]]$VisitedGroups,
+        [string[]]$PathSoFar
     )
 
-    # Keep track of visited groups to avoid infinite loops
-    $visitedGroups = @{}
+    if ($VisitedGroups.Contains($GroupDN)) {
+        return
+    }
+    $VisitedGroups.Add($GroupDN)
 
-    function Get-MembersRecursive {
-        param (
-            [string]$Group
-        )
-
-        # Avoid revisiting groups
-        if ($visitedGroups.ContainsKey($Group)) {
-            return
-        } else {
-            $visitedGroups[$Group] = $true
-        }
-
-        try {
-            $members = Get-ADGroupMember -Identity $Group -ErrorAction Stop
-        } catch {
-            Write-Warning "Cannot access group $Group: $_"
-            return
-        }
-
-        foreach ($member in $members) {
-            if ($member.objectClass -eq 'user' -or $member.objectClass -eq 'foreignSecurityPrincipal') {
-                $member
-            } elseif ($member.objectClass -eq 'group') {
-                Get-MembersRecursive -Group $member.DistinguishedName
-            }
-        }
+    try {
+        $group = Get-ADGroup -Identity $GroupDN -Server $Server -Properties Members
+    } catch {
+        Write-Warning "Group not found or inaccessible: $GroupDN"
+        return
     }
 
-    Get-MembersRecursive -Group $GroupName
+    foreach ($memberDN in $group.Members) {
+        try {
+            $member = Get-ADObject -Identity $memberDN -Server $Server -Properties objectClass
+            if ($member.objectClass -eq "group") {
+                Get-ADGroupRecursiveMembers -GroupDN $memberDN -Server $Server -VisitedGroups $VisitedGroups -PathSoFar ($PathSoFar + $GroupDN)
+            } else {
+                [PSCustomObject]@{
+                    GroupPath  = ($PathSoFar + $GroupDN) -join " -> "
+                    MemberDN   = $memberDN
+                    ObjectType = $member.objectClass
+                }
+            }
+        } catch {
+            Write-Warning "Skipping inaccessible or external member: $memberDN"
+        }
+    }
 }
+
+# Collect all results
+$allResults = @()
+
+foreach ($entry in $groups) {
+    $groupName  = $entry.GroupName
+    $serverName = $entry.ServerName
+
+    try {
+        $rootGroup = Get-ADGroup -Identity $groupName -Server $serverName
+        $visited   = New-Object 'System.Collections.Generic.HashSet[string]'
+        $members   = Get-ADGroupRecursiveMembers -GroupDN $rootGroup.DistinguishedName -Server $serverName -VisitedGroups $visited -PathSoFar @()
+        $allResults += $members
+    } catch {
+        Write-Warning "Failed to process group: $groupName on $serverName"
+    }
+}
+
+# Output results
+$allResults | Export-Csv "C:\Path\To\AllMembers_WithPaths.csv" -NoTypeInformation
