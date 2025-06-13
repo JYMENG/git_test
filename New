@@ -1,113 +1,39 @@
-Import-Module ActiveDirectory
-Import-Module ImportExcel
-
-$groups = Import-Excel -Path "groups.xlsx"
-$allMembers = @()
-
-function Expand-ADGroup {
+function Get-AllADGroupMembers {
     param (
-        [string]$GroupDN,
-        [string]$Server,
-        [string]$RootGroup,
-        [string]$ParentGroup,
-        [hashtable]$seenGroups
+        [Parameter(Mandatory=$true)]
+        [string]$GroupName
     )
 
-    if ($seenGroups.ContainsKey($GroupDN)) { return }
-    $seenGroups[$GroupDN] = $true
+    # Keep track of visited groups to avoid infinite loops
+    $visitedGroups = @{}
 
-    $groupObj = Get-ADObject -Identity "$GroupDN" -Server $Server -Properties member -ErrorAction SilentlyContinue
+    function Get-MembersRecursive {
+        param (
+            [string]$Group
+        )
 
-    if (-not $groupObj) {
-        $allMembers += ,([PSCustomObject]@{
-            RootGroup         = $RootGroup
-            ParentGroup       = $ParentGroup
-            Server            = $Server
-            Name              = $GroupDN
-            ObjectClass       = 'group'
-            SamAccountName    = ''
-            Email             = ''
-            DistinguishedName = $GroupDN
-            Note              = "❌ Cannot read group object"
-        })
-        return
-    }
-
-    foreach ($memberDN in $groupObj.member) {
-        $entry = [PSCustomObject]@{
-            RootGroup         = $RootGroup
-            ParentGroup       = $ParentGroup
-            Server            = $Server
-            Name              = ''
-            ObjectClass       = ''
-            SamAccountName    = ''
-            Email             = ''
-            DistinguishedName = $memberDN
-            Note              = ''
+        # Avoid revisiting groups
+        if ($visitedGroups.ContainsKey($Group)) {
+            return
+        } else {
+            $visitedGroups[$Group] = $true
         }
 
-        # Determine actual object type
-        if (Get-ADUser -Identity "$memberDN" -Server $Server -ErrorAction SilentlyContinue) {
-            $entry.ObjectClass = 'user'
-            $user = Get-ADUser -Identity "$memberDN" -Server $Server -Properties SamAccountName, EmailAddress -ErrorAction SilentlyContinue
-            if ($user) {
-                $entry.Name = $user.Name
-                $entry.SamAccountName = $user.SamAccountName
-                $entry.Email = $user.EmailAddress
-            } else {
-                $entry.Note = "⚠️ Could not retrieve user details"
+        try {
+            $members = Get-ADGroupMember -Identity $Group -ErrorAction Stop
+        } catch {
+            Write-Warning "Cannot access group $Group: $_"
+            return
+        }
+
+        foreach ($member in $members) {
+            if ($member.objectClass -eq 'user' -or $member.objectClass -eq 'foreignSecurityPrincipal') {
+                $member
+            } elseif ($member.objectClass -eq 'group') {
+                Get-MembersRecursive -Group $member.DistinguishedName
             }
-            $allMembers += ,$entry
-        }
-        elseif (Get-ADGroup -Identity "$memberDN" -Server $Server -ErrorAction SilentlyContinue) {
-            $entry.ObjectClass = 'group'
-            $group = Get-ADGroup -Identity "$memberDN" -Server $Server -ErrorAction SilentlyContinue
-            $entry.Name = $group.Name
-            $entry.Note = "✅ Nested group"
-            $allMembers += ,$entry
-
-            # Recurse
-            Expand-ADGroup -GroupDN "$memberDN" -Server $Server -RootGroup $RootGroup -ParentGroup $group.Name -seenGroups $seenGroups
-        }
-        else {
-            # ForeignSecurityPrincipal or unknown object
-            $obj = Get-ADObject -Identity "$memberDN" -Server $Server -Properties Name -ErrorAction SilentlyContinue
-            if ($obj) {
-                $entry.Name = $obj.Name
-            }
-            $entry.ObjectClass = 'other'
-            $entry.Note = "⚠️ Unclassified or external object"
-            $allMembers += ,$entry
         }
     }
+
+    Get-MembersRecursive -Group $GroupName
 }
-
-# MAIN LOOP
-foreach ($row in $groups) {
-    $groupName = $row.GroupName
-    $server = $row.Server
-
-    if (-not $groupName -or -not $server) {
-        Write-Warning "⚠️ Skipping row with missing GroupName or Server"
-        continue
-    }
-
-    Write-Host "`n🔍 Resolving group '$groupName' on server '$server'..."
-
-    $resolved = Get-ADGroup -Identity "$groupName" -Server $server -Properties DistinguishedName -ErrorAction SilentlyContinue
-
-    if (-not $resolved) {
-        Write-Warning "❌ Could not resolve group '$groupName' on '$server'"
-        continue
-    }
-
-    $groupDN = $resolved.DistinguishedName
-    Write-Host "➡️  Resolved to DN: $groupDN"
-
-    $seenGroups = @{}
-    Expand-ADGroup -GroupDN "$groupDN" -Server $server -RootGroup $groupName -ParentGroup $groupName -seenGroups $seenGroups
-}
-
-# Export results
-$allMembers | Export-Csv -Path "AD_Recursive_Members_Final.csv" -NoTypeInformation
-Write-Host "`n✅ Export complete: AD_Recursive_Members_Final.csv"
