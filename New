@@ -1,110 +1,56 @@
-<#
-.DESCRIPTION
-    Recursively get all members from AD groups listed in an Excel file,
-    including members of nested groups, and track all operations via debug logs.
-#>
+$GroupName = "Hr Team"                  # <-- use exactly as shown in Excel
+$ServerName = "yourdc.domain.com"       # <-- replace with actual AD server (DC)
 
-[CmdletBinding()]
-param (
-    [Parameter(Mandatory)]
-    [string]$InputFile,  # Excel file with GroupName and ServerName
+$Visited = New-Object 'System.Collections.Generic.HashSet[string]'
+$Results = @()
 
-    [string]$OutputFile = "$(Split-Path -Path $InputFile)\Members_WithPaths.csv",
-
-    [string]$LogFile = "$(Split-Path -Path $InputFile)\AD_Debug_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
-)
-
-# === Logging Helper ===
-function Write-Log {
-    param (
-        [string]$Message,
-        [string]$Level = "INFO"
-    )
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $entry = "[${timestamp}] [$Level] $Message"
-    Write-Host $entry
-    Add-Content -Path $LogFile -Value $entry
-    if ($Level -eq 'ERROR') { Write-Error $Message }
-    if ($Level -eq 'WARN')  { Write-Warning $Message }
-    if ($Level -eq 'DEBUG') { Write-Debug $Message }
+function Write-DebugLog {
+    param([string]$msg)
+    $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    Write-Host "[$ts] $msg"
 }
 
-# === Load Excel File ===
-if (-not (Test-Path $InputFile)) {
-    throw "Input file not found: $InputFile"
-}
-
-Write-Log "Reading group list from: $InputFile"
-
-if (-not (Get-Module -ListAvailable -Name ImportExcel)) {
-    throw "Module 'ImportExcel' not found. Install it using: Install-Module ImportExcel"
-}
-
-try {
-    $groupList = Import-Excel -Path $InputFile
-} catch {
-    throw "Failed to read Excel file: $_"
-}
-
-if ($groupList.Count -eq 0) {
-    throw "No groups found in input file"
-}
-
-# === Recursive Function ===
 function Get-ADGroupRecursiveMembers {
     param (
         [string]$GroupDN,
         [string]$Server,
-        [System.Collections.Generic.HashSet[string]]$Visited,
+        [System.Collections.Generic.HashSet[string]]$VisitedGroups,
         [string[]]$PathSoFar
     )
 
-    $results = @()
+    $output = @()
 
-    if ($Visited.Contains($GroupDN)) {
-        Write-Log "Already visited: $GroupDN – skipping" "DEBUG"
-        return $results
+    if ($VisitedGroups.Contains($GroupDN)) {
+        Write-DebugLog "Already visited: $GroupDN"
+        return $output
     }
 
-    $Visited.Add($GroupDN)
-    Write-Log "Processing group: $GroupDN on $Server" "DEBUG"
+    $VisitedGroups.Add($GroupDN)
+    Write-DebugLog "Getting members of: $GroupDN on $Server"
 
     try {
         $group = Get-ADGroup -Identity $GroupDN -Server $Server -Properties Members
     } catch {
-        Write-Log "Failed to get group: $GroupDN — $_" "WARN"
-        return $results
-    }
-
-    if (-not $group.Members) {
-        Write-Log "Group $GroupDN has no members" "DEBUG"
-        return $results
+        Write-Warning "Failed to get group: $GroupDN - $_"
+        return $output
     }
 
     foreach ($memberDN in $group.Members) {
         try {
-            $member = Get-ADObject -Identity $memberDN -Server $Server -Properties objectClass, sAMAccountName, mail
+            $member = Get-ADObject -Identity $memberDN -Server $Server -Properties objectClass,sAMAccountName,mail
         } catch {
-            Write-Log "Cannot access member: $memberDN — skipping" "WARN"
+            Write-Warning "Skipping inaccessible member: $memberDN"
             continue
         }
 
         if ($member.objectClass -eq "group") {
-            Write-Log "Found nested group: $memberDN — recursing" "DEBUG"
-            $nested = Get-ADGroupRecursiveMembers -GroupDN $memberDN -Server $Server -Visited $Visited -PathSoFar ($PathSoFar + $GroupDN)
-            $results += $nested
+            Write-DebugLog "Nested group found: $memberDN"
+            $output += Get-ADGroupRecursiveMembers -GroupDN $memberDN -Server $Server -VisitedGroups $VisitedGroups -PathSoFar ($PathSoFar + $GroupDN)
         } elseif ($member.objectClass -eq "foreignSecurityPrincipal") {
-            Write-Log "Skipping ForeignSecurityPrincipal: $memberDN" "WARN"
-            $results += [PSCustomObject]@{
-                GroupPath      = ($PathSoFar + $GroupDN) -join " -> "
-                MemberDN       = $memberDN
-                ObjectType     = "FSP"
-                sAMAccountName = $null
-                Email          = $null
-            }
+            Write-Warning "ForeignSecurityPrincipal (FSP) skipped: $memberDN"
         } else {
-            Write-Log "Collected member: $($member.sAMAccountName) ($memberDN)" "DEBUG"
-            $results += [PSCustomObject]@{
+            Write-DebugLog "User found: $($member.sAMAccountName) ($memberDN)"
+            $output += [pscustomobject]@{
                 GroupPath      = ($PathSoFar + $GroupDN) -join " -> "
                 MemberDN       = $memberDN
                 ObjectType     = $member.objectClass
@@ -114,43 +60,16 @@ function Get-ADGroupRecursiveMembers {
         }
     }
 
-    return $results
+    return $output
 }
 
-# === Main Logic ===
-$finalResults = @()
-
-foreach ($row in $groupList) {
-    $groupName  = $row.GroupName
-    $serverName = $row.ServerName
-
-    if (-not $groupName -or -not $serverName) {
-        Write-Log "Skipping row with missing GroupName or ServerName" "WARN"
-        continue
-    }
-
-    Write-Log "Starting root group: $groupName on $serverName"
-
-    try {
-        $rootGroup = Get-ADGroup -Identity $groupName -Server $serverName
-    } catch {
-        Write-Log "Root group '$groupName' not found on '$serverName': $_" "ERROR"
-        continue
-    }
-
-    $visited = [System.Collections.Generic.HashSet[string]]::new()
-    $members = Get-ADGroupRecursiveMembers -GroupDN $rootGroup.DistinguishedName -Server $serverName -Visited $visited -PathSoFar @()
-
-    Write-Log "Group '$groupName' returned $($members.Count) members"
-
-    $finalResults += $members
+try {
+    $RootGroup = Get-ADGroup -Identity $GroupName -Server $ServerName
+    $Results = Get-ADGroupRecursiveMembers -GroupDN $RootGroup.DistinguishedName -Server $ServerName -VisitedGroups $Visited -PathSoFar @()
+} catch {
+    Write-Error "Could not get root group: $_"
 }
 
-# === Export ===
-if ($finalResults.Count -gt 0) {
-    Write-Log "Exporting results to: $OutputFile"
-    $finalResults | Export-Csv -Path $OutputFile -NoTypeInformation -Encoding UTF8
-    Write-Log "✅ Export completed. Total members: $($finalResults.Count)"
-} else {
-    Write-Log "⚠ No members were collected. Check group names and servers." "WARN"
-}
+Write-Host "`n============== RESULTS =============="
+Write-Host "Total members found: $($Results.Count)"
+$Results | Format-Table -AutoSize
