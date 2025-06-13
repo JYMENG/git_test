@@ -1,9 +1,9 @@
-# CONFIGURATION
+# CONFIG
 $GroupName = "Hr Team"
 $Server = "yourdc.domain.com"
 $OutputFile = "C:\Temp\AD_Export.csv"
 
-# FUNCTION
+# FUNCTION — bulletproof return handling
 function Get-ADGroupRecursiveMembers {
     param (
         [string]$GroupDN,
@@ -12,10 +12,10 @@ function Get-ADGroupRecursiveMembers {
         [string[]]$PathSoFar
     )
 
-    $results = @()
+    $membersList = @()
 
     if ($VisitedGroups.Contains($GroupDN)) {
-        return $results
+        return $membersList
     }
 
     $VisitedGroups.Add($GroupDN)
@@ -23,23 +23,25 @@ function Get-ADGroupRecursiveMembers {
     try {
         $group = Get-ADGroup -Identity $GroupDN -Server $Server -Properties Members
     } catch {
-        Write-Warning "Failed to access group: $GroupDN"
-        return $results
+        Write-Warning "❌ Cannot access group: $GroupDN"
+        return $membersList
     }
 
     foreach ($memberDN in $group.Members) {
         try {
             $member = Get-ADObject -Identity $memberDN -Server $Server -Properties objectClass, sAMAccountName, mail
         } catch {
-            Write-Warning "Skipping member: $memberDN"
+            Write-Warning "⚠ Skipping inaccessible member: $memberDN"
             continue
         }
 
         if ($member.objectClass -eq "group") {
-            $nested = Get-ADGroupRecursiveMembers -GroupDN $memberDN -Server $Server -VisitedGroups $VisitedGroups -PathSoFar ($PathSoFar + $GroupDN)
-            if ($nested) { $results += $nested }
+            $nestedList = Get-ADGroupRecursiveMembers -GroupDN $memberDN -Server $Server -VisitedGroups $VisitedGroups -PathSoFar ($PathSoFar + $GroupDN)
+            if ($nestedList -and $nestedList.Count -gt 0) {
+                $membersList += $nestedList
+            }
         } elseif ($member.objectClass -eq "foreignSecurityPrincipal") {
-            $results += [PSCustomObject]@{
+            $membersList += [PSCustomObject]@{
                 GroupPath      = ($PathSoFar + $GroupDN) -join " -> "
                 MemberDN       = $memberDN
                 ObjectType     = "FSP"
@@ -47,7 +49,7 @@ function Get-ADGroupRecursiveMembers {
                 Email          = ""
             }
         } else {
-            $results += [PSCustomObject]@{
+            $membersList += [PSCustomObject]@{
                 GroupPath      = ($PathSoFar + $GroupDN) -join " -> "
                 MemberDN       = $memberDN
                 ObjectType     = $member.objectClass
@@ -57,29 +59,29 @@ function Get-ADGroupRecursiveMembers {
         }
     }
 
-    return $results
+    return $membersList
 }
 
 # MAIN
 try {
     $rootGroup = Get-ADGroup -Identity $GroupName -Server $Server
-    $visited = [System.Collections.Generic.HashSet[string]]::new()
-    $results = Get-ADGroupRecursiveMembers -GroupDN $rootGroup.DistinguishedName -Server $Server -VisitedGroups $visited -PathSoFar @()
+    $visitedSet = [System.Collections.Generic.HashSet[string]]::new()
 
-    Write-Host "`n✅ Total members: $($results.Count)"
-    
-    # Confirm structure
-    $results[0] | Format-List
-    $results[0] | Get-Member
+    # ✅ This captures ACTUAL member objects
+    $finalResults = Get-ADGroupRecursiveMembers -GroupDN $rootGroup.DistinguishedName -Server $Server -VisitedGroups $visitedSet -PathSoFar @()
 
-    # Export safely
-    if ($results.Count -gt 0) {
+    Write-Host "`n🧾 First result (preview):"
+    $first = $finalResults | Select-Object -First 1
+    $first | Format-List
+    $first.GetType().FullName
+
+    if ($finalResults.Count -gt 0) {
         Remove-Item $OutputFile -ErrorAction SilentlyContinue
-        $results | Export-Csv -Path $OutputFile -NoTypeInformation -Encoding UTF8
-        Write-Host "`n📄 Export complete: $OutputFile"
+        $finalResults | Export-Csv -Path $OutputFile -NoTypeInformation -Encoding UTF8
+        Write-Host "`n✅ Export complete: $OutputFile"
         Start-Process $OutputFile
     } else {
-        Write-Warning "No members to export"
+        Write-Warning "⚠ No members to export"
     }
 
 } catch {
