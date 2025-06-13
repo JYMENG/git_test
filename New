@@ -1,86 +1,25 @@
-# --- CONFIGURATION ---
-$GroupName = "Hr Team"
-$Server = "yourdc.domain.com"
-$OutputFile = "C:\Temp\AD_Export.csv"
-
-# --- USE .AddRange() INSTEAD OF += ---
-function Get-GroupMembersRecursive {
+function Test-Recursive {
     param (
-        [string]$GroupDN,
-        [string]$Server,
-        [System.Collections.Generic.HashSet[string]]$Visited,
-        [string[]]$PathSoFar
+        [int]$Depth,
+        [System.Collections.Generic.List[object]]$Collector
     )
 
-    $members = New-Object 'System.Collections.Generic.List[object]'
-
-    if ($Visited.Contains($GroupDN)) {
-        return $members
+    if ($Depth -le 0) {
+        return
     }
 
-    $Visited.Add($GroupDN)
+    $Collector.Add([PSCustomObject]@{
+        Depth = $Depth
+        Message = "Level $Depth"
+    })
 
-    try {
-        $group = Get-ADGroup -Identity $GroupDN -Server $Server -Properties Members
-    } catch {
-        Write-Warning "❌ Cannot get group: $GroupDN"
-        return $members
-    }
-
-    foreach ($dn in $group.Members) {
-        try {
-            $obj = Get-ADObject -Identity $dn -Server $Server -Properties objectClass, sAMAccountName, mail
-        } catch {
-            continue
-        }
-
-        if ($obj.objectClass -eq "group") {
-            $nested = Get-GroupMembersRecursive -GroupDN $dn -Server $Server -Visited $Visited -PathSoFar ($PathSoFar + $GroupDN)
-            if ($nested.Count -gt 0) {
-                $members.AddRange($nested)
-            }
-        } elseif ($obj.objectClass -eq "foreignSecurityPrincipal") {
-            $members.Add([PSCustomObject]@{
-                GroupPath      = ($PathSoFar + $GroupDN) -join " -> "
-                MemberDN       = $dn
-                ObjectType     = "FSP"
-                sAMAccountName = ""
-                Email          = ""
-            })
-        } else {
-            $members.Add([PSCustomObject]@{
-                GroupPath      = ($PathSoFar + $GroupDN) -join " -> "
-                MemberDN       = $dn
-                ObjectType     = $obj.objectClass
-                sAMAccountName = $obj.sAMAccountName
-                Email          = $obj.mail
-            })
-        }
-    }
-
-    return $members
+    Test-Recursive -Depth ($Depth - 1) -Collector $Collector
 }
 
-# --- MAIN LOGIC ---
-try {
-    $rootGroup = Get-ADGroup -Identity $GroupName -Server $Server
-    $visited = [System.Collections.Generic.HashSet[string]]::new()
-    $finalResults = Get-GroupMembersRecursive -GroupDN $rootGroup.DistinguishedName -Server $Server -Visited $visited -PathSoFar @()
+# Prepare safe collector
+$collected = [System.Collections.Generic.List[object]]::new()
+Test-Recursive -Depth 3 -Collector $collected
 
-    Write-Host "`n📦 First object preview:"
-    $first = $finalResults[0]
-    $first | Format-List
-    $first.GetType().FullName
-
-    if ($finalResults.Count -gt 0) {
-        Remove-Item $OutputFile -ErrorAction SilentlyContinue
-        $finalResults | Export-Csv -Path $OutputFile -NoTypeInformation -Encoding UTF8
-        Write-Host "`n✅ Exported to: $OutputFile"
-        Start-Process $OutputFile
-    } else {
-        Write-Warning "⚠ No members found."
-    }
-
-} catch {
-    Write-Error "Fatal error: $_"
-}
+# Show preview
+$collected | Format-Table
+$collected[0].GetType().FullName
