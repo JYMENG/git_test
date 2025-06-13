@@ -1,14 +1,10 @@
-# Load the required module
-# Install-Module -Name ImportExcel -Scope CurrentUser -Force
-# If Excel not available, use CSV (see notes below)
+$inputFile = "C:\Path\To\Your\Groups.xlsx"
+$outputFile = "C:\Temp\AllMembers_WithPaths.csv"
 
-$inputFile = "C:\Path\To\Your\Groups.xlsx"  # Adjust path
-$csvOutput = "C:\Temp\AllMembers_WithPaths.csv"  # Adjust export path
-
-# Read Excel file with GroupName and ServerName columns
+# Read the Excel file
 $groups = Import-Excel -Path $inputFile
 
-# Recursive function to retrieve members
+# Recursive function that returns a list of member objects
 function Get-ADGroupRecursiveMembers {
     param (
         [string]$GroupDN,
@@ -17,27 +13,28 @@ function Get-ADGroupRecursiveMembers {
         [string[]]$PathSoFar
     )
 
+    $results = @()
+
     if ($VisitedGroups.Contains($GroupDN)) {
-        return
+        return $results
     }
     $VisitedGroups.Add($GroupDN)
 
     try {
         $group = Get-ADGroup -Identity $GroupDN -Server $Server -Properties Members
     } catch {
-        Write-Warning "Group not found or inaccessible: $GroupDN"
-        return
+        Write-Warning "Cannot find or access group: $GroupDN"
+        return $results
     }
 
     foreach ($memberDN in $group.Members) {
         try {
-            $member = Get-ADObject -Identity $memberDN -Server $Server -Properties objectClass,sAMAccountName,mail
+            $member = Get-ADObject -Identity $memberDN -Server $Server -Properties objectClass, sAMAccountName, mail
             if ($member.objectClass -eq "group") {
-                # Recurse into nested group
-                Get-ADGroupRecursiveMembers -GroupDN $memberDN -Server $Server -VisitedGroups $VisitedGroups -PathSoFar ($PathSoFar + $GroupDN)
+                $nestedResults = Get-ADGroupRecursiveMembers -GroupDN $memberDN -Server $Server -VisitedGroups $VisitedGroups -PathSoFar ($PathSoFar + $GroupDN)
+                $results += $nestedResults
             } else {
-                # Return member object
-                [PSCustomObject]@{
+                $results += [PSCustomObject]@{
                     GroupPath      = ($PathSoFar + $GroupDN) -join " -> "
                     MemberDN       = $memberDN
                     ObjectType     = $member.objectClass
@@ -46,35 +43,39 @@ function Get-ADGroupRecursiveMembers {
                 }
             }
         } catch {
-            Write-Warning "Skipping inaccessible or external member (e.g. FSP): $memberDN"
+            Write-Warning "Skipping member (probably foreign or inaccessible): $memberDN"
         }
     }
+
+    return $results
 }
 
-# Result storage
+# Collect all members from all groups
 $allResults = @()
 
 foreach ($entry in $groups) {
-    $groupName  = $entry.GroupName
+    $groupName = $entry.GroupName
     $serverName = $entry.ServerName
 
     try {
         $rootGroup = Get-ADGroup -Identity $groupName -Server $serverName
-        $visited   = New-Object 'System.Collections.Generic.HashSet[string]'
-        $members   = Get-ADGroupRecursiveMembers -GroupDN $rootGroup.DistinguishedName -Server $serverName -VisitedGroups $visited -PathSoFar @()
+        $visited = New-Object 'System.Collections.Generic.HashSet[string]'
+        $members = Get-ADGroupRecursiveMembers -GroupDN $rootGroup.DistinguishedName -Server $serverName -VisitedGroups $visited -PathSoFar @()
 
-        if ($members) {
+        if ($members.Count -gt 0) {
             $allResults += $members
         } else {
-            Write-Warning "No members found for group: $groupName"
+            Write-Warning "No members found under group: $groupName"
         }
     } catch {
         Write-Warning "Failed to get root group: $groupName on $serverName"
     }
 }
 
-Write-Host "Total members collected: $($allResults.Count)"
-
-# Export results to CSV
-$allResults | Export-Csv -Path $csvOutput -NoTypeInformation -Encoding UTF8
-Write-Host "Export complete: $csvOutput"
+# Export results
+if ($allResults.Count -gt 0) {
+    $allResults | Export-Csv -Path $outputFile -NoTypeInformation -Encoding UTF8
+    Write-Host "✅ Export complete: $outputFile"
+} else {
+    Write-Warning "❌ No members found in any group — nothing to export"
+}
