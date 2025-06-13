@@ -103,9 +103,10 @@ foreach ($row in $groupList) {
             Write-Warning "⚠ Group '$groupName' had no members"
         }
     } catch {
-        Write-Warning "❌ Failed to load group: $groupName from $serverName"
-    }
-}
+        Write-Warning "❌ Failed to load group: $groupName from $Write-Host "📦 Previewing first item:"
+$first = $allResults | Select-Object -First 1
+$first | Format-List
+$first.GetType().FullName
 
 # Export result
 if ($allResults.Count -gt 0) {
