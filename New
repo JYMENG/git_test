@@ -1,16 +1,18 @@
 %macro import_excel(file=, sheet=, out=);
+    %local step1 cleaned_sheet;
 
-    /* Step 1: Sanitize the sheet name (replace curly apostrophes with straight ones) */
-    %local cleansheet;
-    %let cleansheet = %sysfunc(translate(&sheet, %str(%'), %str(’)));  /* ’ → ' */
+    /* Step 1: Convert smart quote (’) to straight (') */
+    %let step1 = %sysfunc(translate(&sheet, %str(%'), %str(’)));
 
-    /* Step 2: Enclose in double quotes for PROC IMPORT sheet= */
+    /* Step 2: Remove single and double quotes */
+    %let cleaned_sheet = %sysfunc(compress(&step1, %str(%'"')));
+
+    /* Step 3: Import using double-quoted sheet name */
     proc import datafile="&file"
         out=&out
         dbms=xlsx
         replace;
-        sheet="&cleansheet";  /* double-quoted for spaces and quotes */
+        sheet="&cleaned_sheet";
         getnames=yes;
     run;
-
 %mend;
