@@ -1,101 +1,16 @@
-# Configuration
-$InputFile = "C:\Path\To\Groups.xlsx"
-$OutputFolder = "C:\Temp\AD_Exports"
+%macro import_excel(file=, sheet=, out=);
 
-# Optional: Set to $true to include only user accounts
-$OnlyUsers = $true
+    /* Step 1: Sanitize the sheet name (replace curly apostrophes with straight ones) */
+    %local cleansheet;
+    %let cleansheet = %sysfunc(translate(&sheet, %str(%'), %str(’)));  /* ’ → ' */
 
-# Ensure ImportExcel module is available
-if (-not (Get-Module -ListAvailable -Name ImportExcel)) {
-    throw "Install the ImportExcel module using: Install-Module ImportExcel"
-}
+    /* Step 2: Enclose in double quotes for PROC IMPORT sheet= */
+    proc import datafile="&file"
+        out=&out
+        dbms=xlsx
+        replace;
+        sheet="&cleansheet";  /* double-quoted for spaces and quotes */
+        getnames=yes;
+    run;
 
-# Create output folder if needed
-if (-not (Test-Path $OutputFolder)) {
-    New-Item -ItemType Directory -Path $OutputFolder | Out-Null
-}
-
-# Read Excel input
-$groupList = Import-Excel -Path $InputFile
-if ($groupList.Count -eq 0) {
-    throw "No group entries found in Excel"
-}
-
-# Recursive function using safe collector
-function Get-GroupMembersSafe {
-    param (
-        [string]$GroupDN,
-        [string]$Server,
-        [System.Collections.Generic.HashSet[string]]$Visited,
-        [string[]]$PathSoFar,
-        [System.Collections.Generic.List[object]]$Collector
-    )
-
-    if ($Visited.Contains($GroupDN)) {
-        return
-    }
-
-    $Visited.Add($GroupDN)
-
-    try {
-        $group = Get-ADGroup -Identity $GroupDN -Server $Server -Properties Members
-    } catch {
-        Write-Warning "Cannot access group: $GroupDN"
-        return
-    }
-
-    foreach ($memberDN in $group.Members) {
-        try {
-            $member = Get-ADObject -Identity $memberDN -Server $Server -Properties objectClass, sAMAccountName, mail
-        } catch {
-            Write-Warning "Cannot access member: $memberDN"
-            continue
-        }
-
-        if ($member.objectClass -eq "group") {
-            Get-GroupMembersSafe -GroupDN $memberDN -Server $Server -Visited $Visited -PathSoFar ($PathSoFar + $GroupDN) -Collector $Collector
-        } elseif ($OnlyUsers -and $member.objectClass -ne "user") {
-            continue
-        } else {
-            $Collector.Add([PSCustomObject]@{
-                GroupPath      = ($PathSoFar + $GroupDN) -join " -> "
-                MemberDN       = $memberDN
-                ObjectType     = $member.objectClass
-                sAMAccountName = $member.sAMAccountName
-                Email          = $member.mail
-            })
-        }
-    }
-}
-
-# Loop over each group from Excel
-foreach ($row in $groupList) {
-    $groupName  = $row.GroupName
-    $serverName = $row.ServerName
-
-    if (-not $groupName -or -not $serverName) {
-        Write-Warning "Skipping row with missing GroupName or ServerName"
-        continue
-    }
-
-    try {
-        $rootGroup = Get-ADGroup -Identity $groupName -Server $serverName
-    } catch {
-        Write-Warning "Could not load root group: $groupName on $serverName"
-        continue
-    }
-
-    $visited = [System.Collections.Generic.HashSet[string]]::new()
-    $collector = [System.Collections.Generic.List[object]]::new()
-
-    Get-GroupMembersSafe -GroupDN $rootGroup.DistinguishedName -Server $serverName -Visited $visited -PathSoFar @() -Collector $collector
-
-    if ($collector.Count -gt 0) {
-        $safeGroupName = ($groupName -replace '[^a-zA-Z0-9_-]', '_')
-        $csvPath = Join-Path $OutputFolder "$safeGroupName.csv"
-        $collector | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
-        Write-Host "Exported: $csvPath ($($collector.Count) members)"
-    } else {
-        Write-Warning "No members found for group: $groupName"
-    }
-}
+%mend;
