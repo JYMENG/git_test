@@ -1,46 +1,48 @@
 import pandas as pd
-import glob
 import os
+from glob import glob
 
-# Configurations
-folder_path = 'your/folder/path/'   # change this
-file_pattern = '*.xlsx'             # change if needed
-key_column = 'Key'
-timestamp_column = 'Modified'
-status_column = 'Status'
-keep_status = 'current'             # the status you want to retain
+# === CONFIG ===
+folder_path = 'path/to/your/files'  # ← Change this
+key_column = 'key'
+timestamp_column = 'modified_time'
+status_column = 'status'
+valid_status_values = ['Open', 'Active']  # ← Your target statuses
+end_date = pd.Timestamp('2024-12-31')  # ← Your period cutoff
 
-# Step 1: Load all Excel files
-all_files = glob.glob(os.path.join(folder_path, file_pattern))
-df_list = []
+# === LOAD FILES ===
+all_files = glob(os.path.join(folder_path, "*.xlsx"))
+all_data = []
 
 for file in all_files:
-    try:
-        df = pd.read_excel(file)
-        df.columns = df.columns.str.strip()  # Remove extra spaces in headers
-        if key_column in df.columns and timestamp_column in df.columns and status_column in df.columns:
-            df_list.append(df)
-        else:
-            print(f"Skipped {file} due to missing required columns.")
-    except Exception as e:
-        print(f"Failed to read {file}: {e}")
+    df = pd.read_excel(file)
+    df.columns = df.columns.str.strip().str.lower()
 
-# Step 2: Concatenate and filter by status
-if not df_list:
-    print("No valid files loaded.")
-else:
-    combined_df = pd.concat(df_list, ignore_index=True)
-    
-    # Ensure timestamp is datetime
-    combined_df[timestamp_column] = pd.to_datetime(combined_df[timestamp_column], errors='coerce')
+    if key_column not in df.columns or timestamp_column not in df.columns or status_column not in df.columns:
+        print(f"Skipping {file} (missing required columns)")
+        continue
 
-    # Step 3: Filter by status first
-    filtered_df = combined_df[combined_df[status_column] == keep_status].copy()
+    df[timestamp_column] = pd.to_datetime(df[timestamp_column], errors='coerce')
+    df = df.dropna(subset=[timestamp_column, key_column, status_column])
 
-    # Step 4: Keep latest per Key
-    latest_df = filtered_df.sort_values(by=timestamp_column, ascending=False).drop_duplicates(subset=[key_column], keep='first')
+    all_data.append(df)
 
-    # Optional: Reset index and save
-    latest_df.reset_index(drop=True, inplace=True)
-    latest_df.to_excel('merged_latest_filtered.xlsx', index=False)
-    print("Merged file saved as 'merged_latest_filtered.xlsx'")
+# === CONCATENATE ALL FILES ===
+combined = pd.concat(all_data, ignore_index=True)
+
+# === STEP 1: FILTER BY STATUS IN LIST ===
+filtered_status = combined[combined[status_column].isin(valid_status_values)]
+
+# === STEP 2: FILTER BY MODIFIED TIME CUT-OFF ===
+filtered_period = filtered_status[filtered_status[timestamp_column] <= end_date]
+
+# === STEP 3: PICK LATEST RECORD PER KEY ===
+filtered_period = filtered_period.sort_values(by=[key_column, timestamp_column], ascending=[True, False])
+latest_per_key = filtered_period.drop_duplicates(subset=[key_column], keep='first')
+
+# === SAVE OUTPUT ===
+latest_per_key.to_excel("filtered_latest_by_status_and_period.xlsx", index=False)
+
+print(f"\n✅ Records processed: {len(combined)}")
+print(f"✅ After filtering: {len(filtered_period)}")
+print(f"✅ Final unique keys: {len(latest_per_key)}")
