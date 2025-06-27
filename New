@@ -1,18 +1,46 @@
-%macro import_excel(file=, sheet=, out=);
-    %local step1 cleaned_sheet;
+import pandas as pd
+import glob
+import os
 
-    /* Step 1: Convert smart quote (’) to straight (') */
-    %let step1 = %sysfunc(translate(&sheet, %str(%'), %str(’)));
+# Configurations
+folder_path = 'your/folder/path/'   # change this
+file_pattern = '*.xlsx'             # change if needed
+key_column = 'Key'
+timestamp_column = 'Modified'
+status_column = 'Status'
+keep_status = 'current'             # the status you want to retain
 
-    /* Step 2: Remove single and double quotes */
-    %let cleaned_sheet = %sysfunc(compress(&step1, %str(%'"')));
+# Step 1: Load all Excel files
+all_files = glob.glob(os.path.join(folder_path, file_pattern))
+df_list = []
 
-    /* Step 3: Import using double-quoted sheet name */
-    proc import datafile="&file"
-        out=&out
-        dbms=xlsx
-        replace;
-        sheet="&cleaned_sheet";
-        getnames=yes;
-    run;
-%mend;
+for file in all_files:
+    try:
+        df = pd.read_excel(file)
+        df.columns = df.columns.str.strip()  # Remove extra spaces in headers
+        if key_column in df.columns and timestamp_column in df.columns and status_column in df.columns:
+            df_list.append(df)
+        else:
+            print(f"Skipped {file} due to missing required columns.")
+    except Exception as e:
+        print(f"Failed to read {file}: {e}")
+
+# Step 2: Concatenate and filter by status
+if not df_list:
+    print("No valid files loaded.")
+else:
+    combined_df = pd.concat(df_list, ignore_index=True)
+    
+    # Ensure timestamp is datetime
+    combined_df[timestamp_column] = pd.to_datetime(combined_df[timestamp_column], errors='coerce')
+
+    # Step 3: Filter by status first
+    filtered_df = combined_df[combined_df[status_column] == keep_status].copy()
+
+    # Step 4: Keep latest per Key
+    latest_df = filtered_df.sort_values(by=timestamp_column, ascending=False).drop_duplicates(subset=[key_column], keep='first')
+
+    # Optional: Reset index and save
+    latest_df.reset_index(drop=True, inplace=True)
+    latest_df.to_excel('merged_latest_filtered.xlsx', index=False)
+    print("Merged file saved as 'merged_latest_filtered.xlsx'")
