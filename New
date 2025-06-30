@@ -1,48 +1,28 @@
-import pandas as pd
-import os
-from glob import glob
-
-# === CONFIG ===
-folder_path = 'path/to/your/files'  # ← Change this
-key_column = 'key'
-timestamp_column = 'modified_time'
-status_column = 'status'
-valid_status_values = ['Open', 'Active']  # ← Your target statuses
-end_date = pd.Timestamp('2024-12-31')  # ← Your period cutoff
-
-# === LOAD FILES ===
-all_files = glob(os.path.join(folder_path, "*.xlsx"))
-all_data = []
-
-for file in all_files:
-    df = pd.read_excel(file)
-    df.columns = df.columns.str.strip().str.lower()
-
-    if key_column not in df.columns or timestamp_column not in df.columns or status_column not in df.columns:
-        print(f"Skipping {file} (missing required columns)")
-        continue
-
-    df[timestamp_column] = pd.to_datetime(df[timestamp_column], errors='coerce')
-    df = df.dropna(subset=[timestamp_column, key_column, status_column])
-
-    all_data.append(df)
-
-# === CONCATENATE ALL FILES ===
-combined = pd.concat(all_data, ignore_index=True)
-
-# === STEP 1: FILTER BY STATUS IN LIST ===
-filtered_status = combined[combined[status_column].isin(valid_status_values)]
-
-# === STEP 2: FILTER BY MODIFIED TIME CUT-OFF ===
-filtered_period = filtered_status[filtered_status[timestamp_column] <= end_date]
-
-# === STEP 3: PICK LATEST RECORD PER KEY ===
-filtered_period = filtered_period.sort_values(by=[key_column, timestamp_column], ascending=[True, False])
-latest_per_key = filtered_period.drop_duplicates(subset=[key_column], keep='first')
-
-# === SAVE OUTPUT ===
-latest_per_key.to_excel("filtered_latest_by_status_and_period.xlsx", index=False)
-
-print(f"\n✅ Records processed: {len(combined)}")
-print(f"✅ After filtering: {len(filtered_period)}")
-print(f"✅ Final unique keys: {len(latest_per_key)}")
+proc sql;
+    create table joined as
+    select 
+        t.id,
+        t.date,
+        t.amt,
+        l.limit
+    from 
+        transactions t
+    left join 
+        (select 
+             a.id, 
+             a.effective_date, 
+             a.limit
+         from limits a
+         inner join (
+             select 
+                 id, 
+                 date as txn_date,
+                 max(effective_date) as effective_date
+             from limits, transactions
+             where effective_date <= date
+             group by id, date
+         ) b
+         on a.id = b.id and a.effective_date = b.effective_date
+        ) l
+    on t.id = l.id and l.effective_date <= t.date;
+quit;
