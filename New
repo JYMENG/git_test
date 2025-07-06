@@ -2,44 +2,55 @@ import os
 import pandas as pd
 from bs4 import BeautifulSoup
 
-# Main folder path
+# Path to your root folder
 root_dir = '/path/to/your/folder'
 
-# Collect all HTML/HTM file paths, sorted by descending subfolder path
+# Gather all HTML files, sorted by descending subfolder path
 html_files = []
 for dirpath, dirnames, filenames in os.walk(root_dir):
-    for file in filenames:
-        if file.lower().endswith(('.htm', '.html')):
-            html_files.append(os.path.join(dirpath, file))
-
-# Sort by descending folder path
+    for filename in filenames:
+        if filename.lower().endswith(('.htm', '.html')):
+            html_files.append(os.path.join(dirpath, filename))
 html_files = sorted(html_files, key=lambda x: os.path.dirname(x), reverse=True)
 
-# Parse and collect DataFrames
+# Initialize
 all_rows = []
 first_columns = None
 header_written = False
 
 for file_path in html_files:
-    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-        soup = BeautifulSoup(f, 'html.parser')
-        tables = pd.read_html(str(soup))
-        if tables:
+    try:
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            soup = BeautifulSoup(f, 'html.parser')
+            tables = pd.read_html(str(soup))
+            if not tables:
+                continue
+
             df = tables[0]
+
+            # Skip if too small after dropping first column
             if df.shape[1] < 2:
-                continue  # Skip if dropping 1st col leaves empty or meaningless table
+                continue
+
             df = df.iloc[:, 1:]  # Drop first column
 
             if not header_written:
                 first_columns = df.columns
                 header_written = True
             else:
-                df.columns = first_columns  # Force consistent headers
+                df.columns = first_columns
 
             all_rows.append(df)
 
-# Combine all, remove duplicates
-combined = pd.concat(all_rows, ignore_index=True).drop_duplicates()
+            print(f"Processed: {file_path} ({df.shape[0]} rows)")
 
-# Write to CSV
-combined.to_csv('combined_output.csv', index=False)
+    except Exception as e:
+        print(f"Error processing {file_path}: {e}")
+
+# Finalize and write to CSV
+if all_rows:
+    combined = pd.concat(all_rows, ignore_index=True).drop_duplicates()
+    combined.to_csv('combined_output.csv', index=False)
+    print(f"\n✅ Combined output saved. Total rows: {combined.shape[0]}")
+else:
+    print("\n⚠️ No valid tables found in any file.")
