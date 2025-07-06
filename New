@@ -25,23 +25,24 @@ with open(output_file, 'w', encoding='utf-8') as out_f:
                 if not clean_line:
                     continue
 
-                # Drop first column (split by comma or whitespace, as needed)
+                # Split and drop first column (assuming comma-separated)
                 parts = clean_line.split(',')
                 if len(parts) < 2:
-                    continue  # Skip lines that are too short
-                line_wo_first_col = ','.join(parts[1:])
+                    continue
+                content = ','.join(parts[1:])
+                content_with_source = f"{content},{file_path}"
 
-                # Handle header from the first file only
+                # Handle header separately
                 if line_no == 0 and not header_written:
-                    out_f.write(line_wo_first_col + '\n')
+                    out_f.write(f"{','.join(parts[1:])},source_file\n")
                     header_written = True
                     continue
                 elif line_no == 0:
-                    continue  # skip headers in other files
+                    continue
 
                 # Deduplicate
-                if line_wo_first_col not in seen_lines:
-                    out_f.write(line_wo_first_col + '\n')
-                    seen_lines.add(line_wo_first_col)
+                if content_with_source not in seen_lines:
+                    out_f.write(content_with_source + '\n')
+                    seen_lines.add(content_with_source)
 
-print(f"\n✅ Combined CSV written to: {output_file}")
+print(f"\n✅ Combined CSV with source_file saved to: {output_file}")
