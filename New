@@ -2,29 +2,30 @@ import pandas as pd
 import glob
 import os
 
-# Set the folder containing your .xlsx files
+# Set your folder path
 folder_path = r'/path/to/your/folder'
 
-# Get all .xlsx files in the folder
+# Get all .xlsx files
 file_list = glob.glob(os.path.join(folder_path, '*.xlsx'))
+file_list.sort()  # Optional: ensures consistent order
 
-# Initialize a list to collect DataFrames
 df_list = []
+true_columns = None  # placeholder for header
 
-for file in file_list:
-    # Read from row 4 (skip first 3 rows)
-    df = pd.read_excel(file, skiprows=3)
+for i, file in enumerate(file_list):
+    if i == 0:
+        # First file: read header from row 4
+        df = pd.read_excel(file, skiprows=3)
+        true_columns = df.columns.tolist()
+    else:
+        # Other files: skip header row and assign columns
+        df = pd.read_excel(file, skiprows=4, header=None)
+        df.columns = true_columns
     df_list.append(df)
 
-# Concatenate all DataFrames into one
+# Concatenate all
 combined_df = pd.concat(df_list, ignore_index=True)
 
-# Optional: Drop rows where the first column contains the repeated header label
-# (in case headers are repeated inside the data)
-combined_df = combined_df[combined_df[combined_df.columns[0]] != df.columns[0]]
-
-# Save the combined DataFrame to a CSV or Excel file
+# Save or preview
 combined_df.to_excel('combined_output.xlsx', index=False)
-
-# Print a preview
 print(combined_df.head())
