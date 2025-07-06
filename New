@@ -1,10 +1,10 @@
 import os
 
-# Root folder path
+# Root directory and output file
 root_dir = '/path/to/your/folder'
 output_file = 'combined_output.csv'
 
-# Collect all HTML files, sorted by descending folder path
+# Collect all HTML/HTM files, sorted by descending subfolder
 html_files = []
 for dirpath, _, filenames in os.walk(root_dir):
     for fname in filenames:
@@ -25,29 +25,31 @@ for file_path in html_files:
 
             parts = line.split(',')
             if len(parts) < 2:
-                continue  # not a valid data line
+                continue  # not enough data after dropping index
 
-            # Remove index column
+            # Drop index column
             data_parts = parts[1:]
             line_core = ','.join(data_parts)
 
-            # Handle header
+            # Handle header logic
             if line_no == 0:
-                if not header:
-                    header = data_parts  # store header only from first file
+                if header is None:
+                    header = data_parts  # keep only first file's header
                 continue
-            elif line_core == ','.join(header):
-                continue  # skip duplicate headers
+            elif header is not None and data_parts == header:
+                continue  # skip duplicate header in later files
 
-            # Deduplicate based on content only (excluding file path)
+            # Deduplicate based on content only
             if line_core not in seen_content:
                 seen_content.add(line_core)
                 rows_to_write.append((line_core, file_path))
 
-# Write output
+# Write output file
 with open(output_file, 'w', encoding='utf-8') as out_f:
-    out_f.write(','.join(header) + ',source_file\n')
+    if header:
+        out_f.write(','.join(header) + ',source_file\n')
     for core_line, src in rows_to_write:
         out_f.write(f"{core_line},{src}\n")
 
-print(f"\n✅ Combined CSV written to: {output_file}. Total rows: {len(rows_to_write)}")
+print(f"\n✅ Combined CSV written to: {output_file}")
+print(f"🧾 Rows written: {len(rows_to_write)}")
