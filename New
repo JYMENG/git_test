@@ -1,31 +1,41 @@
-import pandas as pd
-import glob
 import os
+import pandas as pd
+from bs4 import BeautifulSoup
 
-# Set your folder path
-folder_path = r'/path/to/your/folder'
+# Main folder path
+root_dir = '/path/to/your/folder'
 
-# Get all .xlsx files
-file_list = glob.glob(os.path.join(folder_path, '*.xlsx'))
-file_list.sort()  # Optional: ensures consistent order
+# Collect all HTML/HTM file paths, sorted by descending subfolder path
+html_files = []
+for dirpath, dirnames, filenames in os.walk(root_dir):
+    for file in filenames:
+        if file.lower().endswith(('.htm', '.html')):
+            html_files.append(os.path.join(dirpath, file))
 
-df_list = []
-true_columns = None  # placeholder for header
+# Sort by descending folder path
+html_files = sorted(html_files, key=lambda x: os.path.dirname(x), reverse=True)
 
-for i, file in enumerate(file_list):
-    if i == 0:
-        # First file: read header from row 4
-        df = pd.read_excel(file, skiprows=3)
-        true_columns = df.columns.tolist()
-    else:
-        # Other files: skip header row and assign columns
-        df = pd.read_excel(file, skiprows=4, header=None)
-        df.columns = true_columns
-    df_list.append(df)
+# Parse and collect DataFrames
+all_rows = []
+header_written = False
+first_columns = None
 
-# Concatenate all
-combined_df = pd.concat(df_list, ignore_index=True)
+for idx, file_path in enumerate(html_files):
+    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+        soup = BeautifulSoup(f, 'html.parser')
+        tables = pd.read_html(str(soup))
+        if tables:
+            df = tables[0]
+            if not header_written:
+                first_columns = df.columns
+                header_written = True
+            else:
+                # Force columns to match first header
+                df.columns = first_columns
+            all_rows.append(df)
 
-# Save or preview
-combined_df.to_excel('combined_output.xlsx', index=False)
-print(combined_df.head())
+# Combine all data, drop duplicates
+combined = pd.concat(all_rows, ignore_index=True).drop_duplicates()
+
+# Output
+combined.to_csv('combined_output.csv', index=False)
