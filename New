@@ -17,25 +17,29 @@ html_files = sorted(html_files, key=lambda x: os.path.dirname(x), reverse=True)
 
 # Parse and collect DataFrames
 all_rows = []
-header_written = False
 first_columns = None
+header_written = False
 
-for idx, file_path in enumerate(html_files):
+for file_path in html_files:
     with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
         soup = BeautifulSoup(f, 'html.parser')
         tables = pd.read_html(str(soup))
         if tables:
             df = tables[0]
+            if df.shape[1] < 2:
+                continue  # Skip if dropping 1st col leaves empty or meaningless table
+            df = df.iloc[:, 1:]  # Drop first column
+
             if not header_written:
                 first_columns = df.columns
                 header_written = True
             else:
-                # Force columns to match first header
-                df.columns = first_columns
+                df.columns = first_columns  # Force consistent headers
+
             all_rows.append(df)
 
-# Combine all data, drop duplicates
+# Combine all, remove duplicates
 combined = pd.concat(all_rows, ignore_index=True).drop_duplicates()
 
-# Output
+# Write to CSV
 combined.to_csv('combined_output.csv', index=False)
