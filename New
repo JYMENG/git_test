@@ -4,45 +4,50 @@ import os
 root_dir = '/path/to/your/folder'
 output_file = 'combined_output.csv'
 
-# Collect and sort files by descending folder path
+# Collect all HTML files, sorted by descending folder path
 html_files = []
 for dirpath, _, filenames in os.walk(root_dir):
     for fname in filenames:
         if fname.lower().endswith(('.htm', '.html')):
             html_files.append(os.path.join(dirpath, fname))
-
-# Sort by descending subfolder
 html_files = sorted(html_files, key=lambda x: os.path.dirname(x), reverse=True)
 
-seen_lines = set()
-header_written = False
+seen_content = set()
+header = None
+rows_to_write = []
 
+for file_path in html_files:
+    with open(file_path, 'r', encoding='utf-8', errors='ignore') as in_f:
+        for line_no, line in enumerate(in_f):
+            line = line.strip()
+            if not line:
+                continue
+
+            parts = line.split(',')
+            if len(parts) < 2:
+                continue  # not a valid data line
+
+            # Remove index column
+            data_parts = parts[1:]
+            line_core = ','.join(data_parts)
+
+            # Handle header
+            if line_no == 0:
+                if not header:
+                    header = data_parts  # store header only from first file
+                continue
+            elif line_core == ','.join(header):
+                continue  # skip duplicate headers
+
+            # Deduplicate based on content only (excluding file path)
+            if line_core not in seen_content:
+                seen_content.add(line_core)
+                rows_to_write.append((line_core, file_path))
+
+# Write output
 with open(output_file, 'w', encoding='utf-8') as out_f:
-    for file_path in html_files:
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as in_f:
-            for line_no, line in enumerate(in_f):
-                clean_line = line.strip()
-                if not clean_line:
-                    continue
+    out_f.write(','.join(header) + ',source_file\n')
+    for core_line, src in rows_to_write:
+        out_f.write(f"{core_line},{src}\n")
 
-                # Split and drop first column (assuming comma-separated)
-                parts = clean_line.split(',')
-                if len(parts) < 2:
-                    continue
-                content = ','.join(parts[1:])
-                content_with_source = f"{content},{file_path}"
-
-                # Handle header separately
-                if line_no == 0 and not header_written:
-                    out_f.write(f"{','.join(parts[1:])},source_file\n")
-                    header_written = True
-                    continue
-                elif line_no == 0:
-                    continue
-
-                # Deduplicate
-                if content_with_source not in seen_lines:
-                    out_f.write(content_with_source + '\n')
-                    seen_lines.add(content_with_source)
-
-print(f"\n✅ Combined CSV with source_file saved to: {output_file}")
+print(f"\n✅ Combined CSV written to: {output_file}. Total rows: {len(rows_to_write)}")
