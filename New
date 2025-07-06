@@ -1,28 +1,26 @@
-proc sql;
-    create table joined as
-    select 
-        t.id,
-        t.date,
-        t.amt,
-        l.limit
-    from 
-        transactions t
-    left join 
-        (select 
-             a.id, 
-             a.effective_date, 
-             a.limit
-         from limits a
-         inner join (
-             select 
-                 id, 
-                 date as txn_date,
-                 max(effective_date) as effective_date
-             from limits, transactions
-             where effective_date <= date
-             group by id, date
-         ) b
-         on a.id = b.id and a.effective_date = b.effective_date
-        ) l
-    on t.id = l.id and l.effective_date <= t.date;
-quit;
+import pandas as pd
+import glob
+import os
+
+# Set your folder path
+folder_path = r'/path/to/your/folder'
+
+# Get all .coax files in the folder
+file_list = glob.glob(os.path.join(folder_path, '*.coax'))
+
+# Initialize empty list to collect DataFrames
+df_list = []
+
+# Loop through files and read from row 4 (i.e., skip first 3 rows)
+for file in file_list:
+    df = pd.read_csv(file, skiprows=3)  # row 4 is index 3 (0-based)
+    df_list.append(df)
+
+# Concatenate all into one DataFrame
+combined_df = pd.concat(df_list, ignore_index=True)
+
+# Optional: Drop duplicate header rows if some files contain repeated headers
+combined_df = combined_df[combined_df[combined_df.columns[0]] != df.columns[0]]
+
+# Show result
+print(combined_df.head())
