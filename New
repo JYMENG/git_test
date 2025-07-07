@@ -1,38 +1,38 @@
-import csv
-from datetime import datetime
+import hashlib
 
-input_file = 'your_large_file.csv'
+input_file = 'your_input.csv'
 output_file = 'filtered_output.csv'
 
-key_list = set([101, 202, 303])  # as integers
-start_date = datetime.strptime('2023-01-01', '%Y-%m-%d')
-end_date = datetime.strptime('2024-12-31', '%Y-%m-%d')
+seen_keys = set()
+first_line = True
 
 with open(input_file, 'r', encoding='utf-8') as fin, open(output_file, 'w', encoding='utf-8') as fout:
-    for line in fin:
+    for line_num, line in enumerate(fin):
         raw_line = line.strip()
         if not raw_line:
-            continue  # skip empty lines
+            continue
 
-        # Get first field before first comma
-        first_field = raw_line.split(',', 1)[0].strip()
+        fields = raw_line.split(',')
 
-        keep = False
-
-        # Try as int for key match
-        try:
-            if int(first_field) in key_list:
-                keep = True
-        except ValueError:
-            pass
-
-        # Try as date
-        try:
-            dt = datetime.strptime(first_field, '%Y-%m-%d')
-            if start_date <= dt <= end_date:
-                keep = True
-        except ValueError:
-            pass
-
-        if keep:
+        if first_line:
+            # Write header directly
             fout.write(line)
+            first_line = False
+            continue
+
+        # Fix malformed row: combine col 7 + 8 (index 6+7) if too many columns
+        if len(fields) > 10:
+            try:
+                combined = fields[6] + ',' + fields[7]
+                fields = fields[:6] + [combined] + fields[8:]  # shift everything after col 8
+            except IndexError:
+                continue  # skip broken row
+
+        # Get key from selected columns (e.g., first 3 columns)
+        key_tuple = tuple(fields[:3])
+        if key_tuple in seen_keys:
+            continue  # already processed
+        seen_keys.add(key_tuple)
+
+        # Write corrected line
+        fout.write(','.join(fields) + '\n')
