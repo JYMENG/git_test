@@ -1,29 +1,41 @@
-
 import pandas as pd
 from datetime import datetime
 
+# Config
 input_file = 'your_large_file.csv'
 output_file = 'filtered_output.csv'
-date_column = 'my_field'  # column that contains dates and other junk
+date_column = 'my_field'
 
+key_list = set([101, 202, 303])  # integers
 start_date = pd.to_datetime('2023-01-01')
 end_date = pd.to_datetime('2024-12-31')
 
-# Write header once
 first_chunk = True
+chunksize = 100_000
 
-# Process in chunks
-chunksize = 100_000  # adjust based on your memory
-for chunk in pd.read_csv(input_file, chunksize=chunksize):
-    # Try to convert the column to datetime, invalid ones become NaT
+for chunk in pd.read_csv(input_file, chunksize=chunksize, dtype={date_column: str}):
+    # Ensure column is string (because it contains mixed types)
+    chunk[date_column] = chunk[date_column].astype(str)
+
+    # Try to parse dates (invalids → NaT)
     chunk['parsed_date'] = pd.to_datetime(chunk[date_column], errors='coerce')
 
-    # Filter for date range
-    filtered = chunk[(chunk['parsed_date'] >= start_date) & (chunk['parsed_date'] <= end_date)]
+    # Check if value can be parsed as int and is in key_list
+    def is_int_and_in_list(val):
+        try:
+            return int(val) in key_list
+        except:
+            return False
 
-    # Drop the helper column
-    filtered.drop(columns=['parsed_date'], inplace=True)
+    chunk['is_in_key_list'] = chunk[date_column].apply(is_int_and_in_list)
+    chunk['is_valid_date'] = chunk['parsed_date'].between(start_date, end_date)
 
-    # Append to output
+    # Filter: keep rows that are either valid dates in range or integers in list
+    filtered = chunk[chunk['is_valid_date'] | chunk['is_in_key_list']]
+
+    # Drop helper columns
+    filtered.drop(columns=['parsed_date', 'is_in_key_list', 'is_valid_date'], inplace=True)
+
+    # Write to CSV
     filtered.to_csv(output_file, mode='a', index=False, header=first_chunk)
     first_chunk = False
