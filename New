@@ -1,38 +1,25 @@
-import hashlib
+import os
 
-input_file = 'your_input.csv'
-output_file = 'filtered_output.csv'
+# === Configuration ===
+folder_path = r'path\to\your\folder'  # <-- Replace with your folder
+output_file = r'output.txt'
+skip_prefixes = ('TDY', 'AAA', 'BBB')
 
-seen_keys = set()
-first_line = True
+# === Read and process files ===
+all_lines = []
+for filename in sorted(os.listdir(folder_path)):
+    if filename.lower().endswith('.txt'):
+        file_path = os.path.join(folder_path, filename)
+        with open(file_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()[7:]  # Skip first 7 lines (starts from line 8)
+            for line in lines:
+                stripped = line.strip()
+                if stripped and not stripped.startswith(skip_prefixes):
+                    all_lines.append(stripped)
 
-with open(input_file, 'r', encoding='utf-8') as fin, open(output_file, 'w', encoding='utf-8') as fout:
-    for line_num, line in enumerate(fin):
-        raw_line = line.strip()
-        if not raw_line:
-            continue
+# === Write output with index ===
+with open(output_file, 'w', encoding='utf-8') as f:
+    for idx, line in enumerate(all_lines, start=1):
+        f.write(f'{idx}: {line}\n')
 
-        fields = raw_line.split(',')
-
-        if first_line:
-            # Write header directly
-            fout.write(line)
-            first_line = False
-            continue
-
-        # Fix malformed row: combine col 7 + 8 (index 6+7) if too many columns
-        if len(fields) > 10:
-            try:
-                combined = fields[6] + ',' + fields[7]
-                fields = fields[:6] + [combined] + fields[8:]  # shift everything after col 8
-            except IndexError:
-                continue  # skip broken row
-
-        # Get key from selected columns (e.g., first 3 columns)
-        key_tuple = tuple(fields[:3])
-        if key_tuple in seen_keys:
-            continue  # already processed
-        seen_keys.add(key_tuple)
-
-        # Write corrected line
-        fout.write(','.join(fields) + '\n')
+print(f'Done! Output saved to {output_file}')
