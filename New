@@ -1,25 +1,21 @@
 import os
+import shutil
 
-# === Configuration ===
-folder_path = r'path\to\your\folder'  # <-- Replace with your folder
-output_file = r'output.txt'
-skip_prefixes = ('TDY', 'AAA', 'BBB')
+# Set your paths
+source_root = r"Path\To\MainFolder"
+destination = r"Path\To\OutputFolder"
 
-# === Read and process files ===
-all_lines = []
-for filename in sorted(os.listdir(folder_path)):
-    if filename.lower().endswith('.txt'):
-        file_path = os.path.join(folder_path, filename)
-        with open(file_path, 'r', encoding='utf-8') as f:
-            lines = f.readlines()[7:]  # Skip first 7 lines (starts from line 8)
-            for line in lines:
-                stripped = line.strip()
-                if stripped and not stripped.startswith(skip_prefixes):
-                    all_lines.append(stripped)
+# Make sure destination exists
+os.makedirs(destination, exist_ok=True)
 
-# === Write output with index ===
-with open(output_file, 'w', encoding='utf-8') as f:
-    for idx, line in enumerate(all_lines, start=1):
-        f.write(f'{idx}: {line}\n')
-
-print(f'Done! Output saved to {output_file}')
+# Loop through each subfolder
+for subfolder in os.listdir(source_root):
+    subfolder_path = os.path.join(source_root, subfolder)
+    
+    if os.path.isdir(subfolder_path):
+        source_file = os.path.join(subfolder_path, "data.txt")  # Replace with your real filename
+        if os.path.isfile(source_file):
+            new_name = f"data_{subfolder}.txt"
+            dest_file = os.path.join(destination, new_name)
+            shutil.copy2(source_file, dest_file)
+            print(f"Copied: {source_file} -> {dest_file}")
