@@ -1,23 +1,25 @@
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 from datetime import datetime, timedelta
 
 # === CONFIGURATION ===
 table_names = ['table1', 'table2', 'table3']  # Replace with your actual table names
 date_column = 'date_column'  # Replace with your actual date column name
-output_file = 'weekly_data.xlsx'
+output_data_file = 'weekly_data.xlsx'
+output_schema_file = 'table_schemas.xlsx'
 
-# SQLAlchemy connection string example (adjust for your DB):
-# For SQLite: 'sqlite:///your_database.db'
-# For PostgreSQL: 'postgresql://user:password@localhost/dbname'
+# Create SQLAlchemy engine (change for your DB)
+# Examples:
+# SQLite:      engine = create_engine('sqlite:///your_database.db')
+# PostgreSQL:  engine = create_engine('postgresql://user:password@localhost/dbname')
 engine = create_engine('sqlite:///your_database.db')
 
-# Date filter: last 7 days
+# Date range for last 7 days
 end_date = datetime.today()
 start_date = end_date - timedelta(days=7)
 
-# === FETCH & WRITE DATA ===
-with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+# === FETCH WEEKLY DATA ===
+with pd.ExcelWriter(output_data_file, engine='openpyxl') as writer:
     for table in table_names:
         query = f"""
             SELECT * FROM {table}
@@ -25,6 +27,23 @@ with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
         """
         try:
             df = pd.read_sql_query(query, con=engine)
-            df.to_excel(writer, sheet_name=table[:31], index=False)  # Sheet names max 31 chars
+            df.to_excel(writer, sheet_name=table[:31], index=False)
         except Exception as e:
-            print(f"Error processing {table}: {e}")
+            print(f"[Data Error] {table}: {e}")
+
+# === OUTPUT SCHEMA / STRUCTURE ===
+inspector = inspect(engine)
+
+with pd.ExcelWriter(output_schema_file, engine='openpyxl') as writer:
+    for table in table_names:
+        try:
+            columns = inspector.get_columns(table)
+            schema_df = pd.DataFrame([{
+                'name': col['name'],
+                'type': str(col['type']),
+                'nullable': col['nullable'],
+                'default': col.get('default')
+            } for col in columns])
+            schema_df.to_excel(writer, sheet_name=table[:31], index=False)
+        except Exception as e:
+            print(f"[Schema Error] {table}: {e}")
