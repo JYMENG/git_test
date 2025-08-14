@@ -1,55 +1,23 @@
-# -*- coding: utf-8 -*-
-import oracledb
-import pandas as pd
 from pathlib import Path
 
-# ---- USER SETTINGS ----
-HOST = "your-hostname"
-PORT = 1521
-SERVICE_NAME = "your-service"
-USER = "your_user"
-PASSWORD = "your_password"
-TARGET_SCHEMA = "MY_SCHEMA"  # uppercase recommended
+def merge_visible_lines(folder, output_file, encoding="utf-8-sig"):
+    folder_path = Path(folder)
+    files = sorted(list(folder_path.glob("*.htm")) + list(folder_path.glob("*.html")))
 
-OUT_DIR = Path("schema_structure")
-# -----------------------
+    with open(output_file, "w", encoding=encoding, newline="") as outfile:
+        for file in files:
+            try:
+                with open(file, "r", encoding=encoding, errors="replace") as infile:
+                    for line in infile:
+                        # Strip trailing newline to avoid double-spacing in output
+                        outfile.write(line.rstrip("\n") + "\n")
+            except Exception as e:
+                print(f"[WARN] Skipped {file.name}: {e}")
 
-def connect():
-    dsn = oracledb.makedsn(HOST, PORT, service_name=SERVICE_NAME)
-    return oracledb.connect(user=USER, password=PASSWORD, dsn=dsn)
+    print(f"Done. Appended all visible lines from {len(files)} files into {output_file}")
 
-def get_table_columns(conn):
-    sql = """
-        SELECT owner, table_name, column_id, column_name,
-               data_type, data_length, data_precision, data_scale,
-               nullable, data_default
-        FROM   ALL_TAB_COLUMNS
-        WHERE  owner = :owner
-        ORDER  BY table_name, column_id
-    """
-    return pd.read_sql(sql, conn, params={"owner": TARGET_SCHEMA})
-
-def get_constraints(conn):
-    sql = """
-        SELECT c.owner, c.table_name, c.constraint_name, c.constraint_type,
-               col.column_name, col.position
-        FROM   ALL_CONSTRAINTS c
-        JOIN   ALL_CONS_COLUMNS col
-          ON   c.owner = col.owner
-          AND  c.constraint_name = col.constraint_name
-        WHERE  c.owner = :owner
-        ORDER  BY c.table_name, c.constraint_name, col.position
-    """
-    return pd.read_sql(sql, conn, params={"owner": TARGET_SCHEMA})
-
-if __name__ == "__main__":
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    with connect() as conn:
-        columns_df = get_table_columns(conn)
-        constraints_df = get_constraints(conn)
-
-        columns_df.to_csv(OUT_DIR / f"{TARGET_SCHEMA}_columns.csv", index=False)
-        constraints_df.to_csv(OUT_DIR / f"{TARGET_SCHEMA}_constraints.csv", index=False)
-
-        print(f"Saved columns to: {OUT_DIR / f'{TARGET_SCHEMA}_columns.csv'}")
-        print(f"Saved constraints to: {OUT_DIR / f'{TARGET_SCHEMA}_constraints.csv'}")
+# Example usage
+merge_visible_lines(
+    folder=r"C:\path\to\your\folder", 
+    output_file=r"C:\path\to\output\merged.txt"
+)
