@@ -1,8 +1,10 @@
-# Install the Graph module (only once)
-Install-Module Microsoft.Graph -Scope AllUsers
+# Install if not present
+Install-Module AzureAD
 
-# Import it into your session
-Import-Module Microsoft.Graph
+# Connect
+Connect-AzureAD
 
-# Connect to Graph
-Connect-MgGraph -Scopes "Group.Read.All"
+# Get group + members
+$group = Get-AzureADGroup -SearchString "MyGroupName"
+Get-AzureADGroupMember -ObjectId $group.ObjectId |
+    Select-Object @{Name='GroupName';Expression={$group.DisplayName}}, DisplayName, UserPrincipalName
