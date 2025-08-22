@@ -1,1 +1,4 @@
-$g = Get-AzureADGroup -All $true | Where-Object DisplayName -eq 'MyGroupName'; Get-AzureADGroupMember -All $true -ObjectId $g.ObjectId | Select-Object @{n='GroupName';e={$g.DisplayName}}, * | Export-Csv "$PWD\GroupMembers_$($g.DisplayName)_$(Get-Date -f yyyyMMdd_HHmm).csv" -NoTypeInformation -Encoding UTF8
+$g = Get-AzureADGroup -All $true | Where-Object DisplayName -eq 'MyGroupName'
+Get-AzureADGroupMember -All $true -ObjectId $g.ObjectId |
+    Select-Object @{n='GroupName';e={$g.DisplayName}}, * |
+    Export-Csv "$PWD\GroupMembers_$($g.DisplayName).txt" -Delimiter '|' -NoTypeInformation -Encoding UTF8
