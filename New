@@ -1,10 +1,1 @@
-# Install if not present
-Install-Module AzureAD
-
-# Connect
-Connect-AzureAD
-
-# Get group + members
-$group = Get-AzureADGroup -SearchString "MyGroupName"
-Get-AzureADGroupMember -ObjectId $group.ObjectId |
-    Select-Object @{Name='GroupName';Expression={$group.DisplayName}}, DisplayName, UserPrincipalName
+$g = Get-AzureADGroup -All $true | Where-Object DisplayName -eq 'MyGroupName'; Get-AzureADGroupMember -All $true -ObjectId $g.ObjectId | Select-Object @{n='GroupName';e={$g.DisplayName}}, * | Export-Csv "$PWD\GroupMembers_$($g.DisplayName)_$(Get-Date -f yyyyMMdd_HHmm).csv" -NoTypeInformation -Encoding UTF8
