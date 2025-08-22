@@ -1,35 +1,8 @@
-# Connect with the right scope
+# Install the Graph module (only once)
+Install-Module Microsoft.Graph -Scope AllUsers
+
+# Import it into your session
+Import-Module Microsoft.Graph
+
+# Connect to Graph
 Connect-MgGraph -Scopes "Group.Read.All"
-
-# Exact match on display name (escape single quotes if needed)
-$groupName = 'MyGroupName'
-$escaped   = $groupName -replace "'", "''"
-$group     = Get-MgGroup -Filter "displayName eq '$escaped'"
-if (-not $group) { Write-Warning "Group not found: $groupName"; return }
-
-# Get members and include GroupName column
-$members = Get-MgGroupMember -GroupId $group.Id -All
-
-# Members can be different types; normalize common fields
-$members | ForEach-Object {
-    # Pull properties reliably whether the object is typed or in AdditionalProperties
-    $dn  = $_.DisplayName
-    if (-not $dn -and $_.AdditionalProperties) { $dn = $_.AdditionalProperties['displayName'] }
-
-    $upn = $_.UserPrincipalName
-    if (-not $upn -and $_.AdditionalProperties) { $upn = $_.AdditionalProperties['userPrincipalName'] }
-
-    $mail = $_.Mail
-    if (-not $mail -and $_.AdditionalProperties) { $mail = $_.AdditionalProperties['mail'] }
-
-    $otype = $_.'@odata.type'
-    if ($otype) { $otype = $otype -replace '#microsoft.graph.', '' }
-
-    [pscustomobject]@{
-        GroupName  = $group.DisplayName
-        MemberType = $otype
-        DisplayName = $dn
-        UserPrincipalName = $upn
-        Mail = $mail
-    }
-} | Format-Table -AutoSize
