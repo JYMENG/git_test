@@ -1,4 +1,15 @@
-$g = Get-AzureADGroup -All $true | Where-Object DisplayName -eq 'MyGroupName'
-Get-AzureADGroupMember -All $true -ObjectId $g.ObjectId |
+$g = Get-AzureADGroup -SearchString "MyGroupName"
+Get-AzureADGroupMember -ObjectId $g.ObjectId -All $true |
     Select-Object @{n='GroupName';e={$g.DisplayName}}, * |
-    Export-Csv "$PWD\GroupMembers_$($g.DisplayName).txt" -Delimiter '|' -NoTypeInformation -Encoding UTF8
+    ForEach-Object {
+        $_ | ForEach-Object {
+            foreach ($prop in $_.PSObject.Properties) {
+                if ($prop.Value -is [string]) {
+                    # Replace CRLF and LF with space
+                    $prop.Value = $prop.Value -replace "`r`n", " " -replace "`n", " "
+                }
+            }
+            $_
+        }
+    } |
+    Export-Csv .\GroupMembers_Clean.csv -NoTypeInformation -Delimiter '|' -Encoding UTF8
