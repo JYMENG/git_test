@@ -1,15 +1,5 @@
-$g = Get-AzureADGroup -SearchString "MyGroupName"
-Get-AzureADGroupMember -ObjectId $g.ObjectId -All $true |
-    Select-Object @{n='GroupName';e={$g.DisplayName}}, * |
-    ForEach-Object {
-        $_ | ForEach-Object {
-            foreach ($prop in $_.PSObject.Properties) {
-                if ($prop.Value -is [string]) {
-                    # Replace CRLF and LF with space
-                    $prop.Value = $prop.Value -replace "`r`n", " " -replace "`n", " "
-                }
-            }
-            $_
-        }
-    } |
-    Export-Csv .\GroupMembers_Clean.csv -NoTypeInformation -Delimiter '|' -Encoding UTF8
+Connect-AzureAD
+
+# This will return all groups where the DisplayName contains "Sales"
+Get-AzureADGroup -All $true | Where-Object { $_.DisplayName -like "*Sales*" } | 
+    Select ObjectId, DisplayName
