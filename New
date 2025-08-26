@@ -1,5 +1,48 @@
-Connect-AzureAD
+param(
+    [string]$NameContains = "Sales",
+    [string]$OutFile = ("GroupMembers_AzureAD_{0}.csv" -f (Get-Date -Format "yyyyMMdd_HHmm"))
+)
 
-# This will return all groups where the DisplayName contains "Sales"
-Get-AzureADGroup -All $true | Where-Object { $_.DisplayName -like "*Sales*" } | 
-    Select ObjectId, DisplayName
+Connect-AzureAD | Out-Null
+
+$groups = Get-AzureADGroup -All $true | Where-Object { $_.DisplayName -like "*$NameContains*" }
+
+$rows = foreach ($g in $groups) {
+    $members = Get-AzureADGroupMember -ObjectId $g.ObjectId -All $true -ErrorAction SilentlyContinue
+    foreach ($m in $members) {
+        if ($m.ObjectType -eq "User") {
+            $u = Get-AzureADUser -ObjectId $m.ObjectId
+            [PSCustomObject]@{
+                GroupDisplayName  = $g.DisplayName
+                GroupId           = $g.ObjectId
+                MemberType        = "User"
+                ObjectId          = $u.ObjectId
+                UserPrincipalName = $u.UserPrincipalName
+                DisplayName       = $u.DisplayName
+                Mail              = $u.Mail
+                JobTitle          = $u.JobTitle
+                Department        = $u.Department
+                AccountEnabled    = $u.AccountEnabled
+                City              = $u.City
+                State             = $u.State
+                Country           = $u.Country
+                StreetAddress     = $u.StreetAddress
+                PostalCode        = $u.PostalCode
+                TelephoneNumber   = $u.TelephoneNumber
+                Mobile            = $u.Mobile
+                ExtensionProperty = ($u.ExtensionProperty.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" } -join ';')
+            }
+        } else {
+            [PSCustomObject]@{
+                GroupDisplayName  = $g.DisplayName
+                GroupId           = $g.ObjectId
+                MemberType        = $m.ObjectType
+                ObjectId          = $m.ObjectId
+                DisplayName       = $m.DisplayName
+            }
+        }
+    }
+}
+
+$rows | Select-Object * | Export-Csv -NoTypeInformation -Encoding UTF8 -Path $OutFile
+Write-Host "Done. Exported to $OutFile"
