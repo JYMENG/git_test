@@ -3,46 +3,143 @@ param(
     [string]$OutFile = ("GroupMembers_AzureAD_{0}.csv" -f (Get-Date -Format "yyyyMMdd_HHmm"))
 )
 
+# 0) Connect
 Connect-AzureAD | Out-Null
 
-$groups = Get-AzureADGroup -All $true | Where-Object { $_.DisplayName -like "*$NameContains*" }
+# 1) Groups whose display name CONTAINS the text (case-insensitive)
+$groups = Get-AzureADGroup -All $true |
+          Where-Object { $_.DisplayName -like "*$NameContains*" }
 
-$rows = foreach ($g in $groups) {
+if (-not $groups) {
+    Write-Host "No groups found containing '$NameContains' in displayName."
+    return
+}
+
+# 2) Collect rows
+$rows = New-Object 'System.Collections.Generic.List[object]'
+
+foreach ($g in $groups) {
+    Write-Host "Processing group: $($g.DisplayName) [$($g.ObjectId)]"
+
+    # all DIRECT members
     $members = Get-AzureADGroupMember -ObjectId $g.ObjectId -All $true -ErrorAction SilentlyContinue
+    if (-not $members) { continue }
+
     foreach ($m in $members) {
-        if ($m.ObjectType -eq "User") {
-            $u = Get-AzureADUser -ObjectId $m.ObjectId
-            [PSCustomObject]@{
-                GroupDisplayName  = $g.DisplayName
-                GroupId           = $g.ObjectId
-                MemberType        = "User"
-                ObjectId          = $u.ObjectId
-                UserPrincipalName = $u.UserPrincipalName
-                DisplayName       = $u.DisplayName
-                Mail              = $u.Mail
-                JobTitle          = $u.JobTitle
-                Department        = $u.Department
-                AccountEnabled    = $u.AccountEnabled
-                City              = $u.City
-                State             = $u.State
-                Country           = $u.Country
-                StreetAddress     = $u.StreetAddress
-                PostalCode        = $u.PostalCode
-                TelephoneNumber   = $u.TelephoneNumber
-                Mobile            = $u.Mobile
-                ExtensionProperty = ($u.ExtensionProperty.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" } -join ';')
+        switch ($m.ObjectType) {
+            'User' {
+                $u = Get-AzureADUser -ObjectId $m.ObjectId -ErrorAction SilentlyContinue
+                if ($u) {
+                    # Flatten extension properties (if any)
+                    $ext = $null
+                    if ($u.ExtensionProperty) {
+                        $ext = ($u.ExtensionProperty.GetEnumerator() |
+                                ForEach-Object { "$($_.Key)=$($_.Value)" }) -join ';'
+                    }
+
+                    $rows.Add([PSCustomObject]@{
+                        GroupDisplayName              = $g.DisplayName
+                        GroupId                       = $g.ObjectId
+                        MemberType                    = "User"
+                        ObjectId                      = $u.ObjectId
+                        UserPrincipalName             = $u.UserPrincipalName
+                        Mail                          = $u.Mail
+                        DisplayName                   = $u.DisplayName
+                        GivenName                     = $u.GivenName
+                        Surname                       = $u.Surname
+                        JobTitle                      = $u.JobTitle
+                        Department                    = $u.Department
+                        CompanyName                   = $u.CompanyName
+                        City                          = $u.City
+                        State                         = $u.State
+                        Country                       = $u.Country
+                        StreetAddress                 = $u.StreetAddress
+                        PostalCode                    = $u.PostalCode
+                        TelephoneNumber               = $u.TelephoneNumber
+                        Mobile                        = $u.Mobile
+                        FacsimileTelephoneNumber      = $u.FacsimileTelephoneNumber
+                        MailNickname                  = $u.MailNickname
+                        AccountEnabled                = $u.AccountEnabled
+                        DirSyncEnabled                = $u.DirSyncEnabled
+                        OnPremisesSecurityIdentifier  = $u.OnPremisesSecurityIdentifier
+                        OnPremisesSamAccountName      = $u.OnPremisesSamAccountName
+                        OnPremisesDistinguishedName   = $u.OnPremisesDistinguishedName
+                        ImmutableId                   = $u.ImmutableId
+                        UsageLocation                  = $u.UsageLocation
+                        UserType                      = $u.UserType
+                        ExtensionProperty              = $ext
+                    })
+                }
             }
-        } else {
-            [PSCustomObject]@{
-                GroupDisplayName  = $g.DisplayName
-                GroupId           = $g.ObjectId
-                MemberType        = $m.ObjectType
-                ObjectId          = $m.ObjectId
-                DisplayName       = $m.DisplayName
+            'ServicePrincipal' {
+                $sp = Get-AzureADServicePrincipal -ObjectId $m.ObjectId -ErrorAction SilentlyContinue
+                if ($sp) {
+                    $rows.Add([PSCustomObject]@{
+                        GroupDisplayName = $g.DisplayName
+                        GroupId          = $g.ObjectId
+                        MemberType       = "ServicePrincipal"
+                        ObjectId         = $sp.ObjectId
+                        AppId            = $sp.AppId
+                        DisplayName      = $sp.DisplayName
+                        AccountEnabled   = $sp.AccountEnabled
+                        AppOwnerTenantId = $sp.AppOwnerTenantId
+                        PublisherName    = $sp.PublisherName
+                        ServicePrincipalType = $sp.ServicePrincipalType
+                        Tags             = ($sp.Tags -join ';')
+                    })
+                }
+            }
+            'Device' {
+                $d = Get-AzureADDevice -ObjectId $m.ObjectId -ErrorAction SilentlyContinue
+                if ($d) {
+                    $rows.Add([PSCustomObject]@{
+                        GroupDisplayName     = $g.DisplayName
+                        GroupId              = $g.ObjectId
+                        MemberType           = "Device"
+                        ObjectId             = $d.ObjectId
+                        DeviceId             = $d.DeviceId
+                        DisplayName          = $d.DisplayName
+                        AccountEnabled       = $d.AccountEnabled
+                        DeviceOSType         = $d.DeviceOSType
+                        DeviceOSVersion      = $d.DeviceOSVersion
+                        DeviceTrustType      = $d.DeviceTrustType
+                        IsCompliant          = $d.IsCompliant
+                        IsManaged            = $d.IsManaged
+                        OnPremisesSyncEnabled= $d.OnPremisesSyncEnabled
+                    })
+                }
+            }
+            'Group' {
+                $gg = Get-AzureADGroup -ObjectId $m.ObjectId -ErrorAction SilentlyContinue
+                if ($gg) {
+                    $rows.Add([PSCustomObject]@{
+                        GroupDisplayName = $g.DisplayName
+                        GroupId          = $g.ObjectId
+                        MemberType       = "Group"
+                        ObjectId         = $gg.ObjectId
+                        DisplayName      = $gg.DisplayName
+                        Mail             = $gg.Mail
+                        MailEnabled      = $gg.MailEnabled
+                        MailNickname     = $gg.MailNickname
+                        SecurityEnabled  = $gg.SecurityEnabled
+                        DirSyncEnabled   = $gg.DirSyncEnabled
+                    })
+                }
+            }
+            default {
+                # Fallback keeps at least the IDs
+                $rows.Add([PSCustomObject]@{
+                    GroupDisplayName = $g.DisplayName
+                    GroupId          = $g.ObjectId
+                    MemberType       = $m.ObjectType
+                    ObjectId         = $m.ObjectId
+                    DisplayName      = $m.DisplayName
+                })
             }
         }
     }
 }
 
-$rows | Select-Object * | Export-Csv -NoTypeInformation -Encoding UTF8 -Path $OutFile
+# 3) Export – union of all fields becomes columns
+$rows | Select-Object * | Export-Csv -Path $OutFile -NoTypeInformation -Encoding UTF8
 Write-Host "Done. Exported to $OutFile"
