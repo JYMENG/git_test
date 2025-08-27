@@ -1,51 +1,14 @@
-'User' {
-    $u = Get-AzureADUser -ObjectId $m.ObjectId -ErrorAction SilentlyContinue
-    if ($u) {
-        # Flatten extension properties (if any)
-        $ext = $null
-        if ($u.ExtensionProperty) {
-            $ext = ($u.ExtensionProperty.GetEnumerator() |
-                    ForEach-Object { "$($_.Key)=$($_.Value)" }) -join ';'
-        }
+import pandas as pd
 
-        # Clean up address fields to remove line breaks
-        $street = $u.StreetAddress -replace "(`r|`n)+", " "
-        $city   = $u.City          -replace "(`r|`n)+", " "
-        $state  = $u.State         -replace "(`r|`n)+", " "
-        $country= $u.Country       -replace "(`r|`n)+", " "
-        $postal = $u.PostalCode    -replace "(`r|`n)+", " "
+# Example DataFrame
+df = pd.DataFrame({
+    "id": [1, 2, 3, 4],
+    "name": ["apple", "fizz", "ZZtop", "banana"],
+    "desc": ["ok", "zzz test", "great", "fine"]
+})
 
-        $rows.Add([PSCustomObject]@{
-            GroupDisplayName              = $g.DisplayName
-            GroupId                       = $g.ObjectId
-            MemberType                    = "User"
-            ObjectId                      = $u.ObjectId
-            UserPrincipalName             = $u.UserPrincipalName
-            Mail                          = $u.Mail
-            DisplayName                   = $u.DisplayName
-            GivenName                     = $u.GivenName
-            Surname                       = $u.Surname
-            JobTitle                      = $u.JobTitle
-            Department                    = $u.Department
-            CompanyName                   = $u.CompanyName
-            City                          = $city
-            State                         = $state
-            Country                       = $country
-            StreetAddress                 = $street
-            PostalCode                    = $postal
-            TelephoneNumber               = $u.TelephoneNumber
-            Mobile                        = $u.Mobile
-            FacsimileTelephoneNumber      = $u.FacsimileTelephoneNumber
-            MailNickname                  = $u.MailNickname
-            AccountEnabled                = $u.AccountEnabled
-            DirSyncEnabled                = $u.DirSyncEnabled
-            OnPremisesSecurityIdentifier  = $u.OnPremisesSecurityIdentifier
-            OnPremisesSamAccountName      = $u.OnPremisesSamAccountName
-            OnPremisesDistinguishedName   = $u.OnPremisesDistinguishedName
-            ImmutableId                   = $u.ImmutableId
-            UsageLocation                 = $u.UsageLocation
-            UserType                      = $u.UserType
-            ExtensionProperty             = $ext
-        })
-    }
-}
+# Drop rows where *any column value* contains "zz" or "zzz" (case-insensitive)
+mask = df.astype(str).apply(lambda x: x.str.contains(r"zz+", case=False, na=False)).any(axis=1)
+df_filtered = df[~mask]
+
+print(df_filtered)
