@@ -1,9 +1,11 @@
-SELECT
+WITH s AS (
+  SELECT
     record_date,
-    col1,
-    col2,
+    col1, col2,
     LAG(col1) OVER (ORDER BY record_date) AS prev_col1,
     LAG(col2) OVER (ORDER BY record_date) AS prev_col2
-FROM daily_data
-WHERE col1 <> LAG(col1) OVER (ORDER BY record_date)
-   OR col2 <> LAG(col2) OVER (ORDER BY record_date);
+  FROM daily_data
+)
+SELECT record_date, col1, col2
+FROM s
+WHERE (col1, col2) IS DISTINCT FROM (prev_col1, prev_col2);
