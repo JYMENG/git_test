@@ -1,14 +1,9 @@
-import pandas as pd
-
-# Example DataFrame
-df = pd.DataFrame({
-    "id": [1, 2, 3, 4],
-    "name": ["apple", "fizz", "ZZtop", "banana"],
-    "desc": ["ok", "zzz test", "great", "fine"]
-})
-
-# Drop rows where *any column value* contains "zz" or "zzz" (case-insensitive)
-mask = df.astype(str).apply(lambda x: x.str.contains(r"zz+", case=False, na=False)).any(axis=1)
-df_filtered = df[~mask]
-
-print(df_filtered)
+SELECT
+    record_date,
+    col1,
+    col2,
+    LAG(col1) OVER (ORDER BY record_date) AS prev_col1,
+    LAG(col2) OVER (ORDER BY record_date) AS prev_col2
+FROM daily_data
+WHERE col1 <> LAG(col1) OVER (ORDER BY record_date)
+   OR col2 <> LAG(col2) OVER (ORDER BY record_date);
