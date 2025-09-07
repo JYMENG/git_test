@@ -1,13 +1,45 @@
-SELECT record_date, col1, col2
-FROM (
-  SELECT
-    record_date,
-    col1, col2,
-    LAG(col1) OVER (ORDER BY record_date) AS prev_col1,
-    LAG(col2) OVER (ORDER BY record_date) AS prev_col2
-  FROM dbo.daily_data
-) s
-WHERE
-  (col1 <> prev_col1 OR (col1 IS NULL) <> (prev_col1 IS NULL))
-  OR
-  (col2 <> prev_col2 OR (col2 IS NULL) <> (prev_col2 IS NULL));
+import oracledb
+
+conn = oracledb.connect(user="...", password="...", dsn="...")
+cur = conn.cursor()
+
+# For string IDs use SYS.ODCIVARCHAR2LIST; for numeric IDs use SYS.ODCINUMBERLIST
+vlist_t = conn.gettype("SYS.ODCIVARCHAR2LIST")
+
+# Suppose you already have a Python list of IDs
+trade_ids = [ "T001", "T002", "T003", ... ]
+
+# Chunk the list to avoid overly large binds (tune chunk size as needed)
+CHUNK = 5000
+def chunks(seq, n):
+    for i in range(0, len(seq), n):
+        yield seq[i:i+n]
+
+results_file = open("trade_details.csv", "w", newline="")
+import csv
+writer = csv.writer(results_file)
+wrote_header = False
+
+for part in chunks(trade_ids, CHUNK):
+    arr = vlist_t.newobject()
+    arr.extend(part)
+
+    sql = """
+    SELECT t.*
+    FROM big_trade_table t
+    JOIN TABLE(:idlist) l
+      ON l.COLUMN_VALUE = t.trade_id
+    """
+    cur.execute(sql, idlist=arr)
+
+    if not wrote_header:
+        writer.writerow([d[0] for d in cur.description])
+        wrote_header = True
+
+    while True:
+        batch = cur.fetchmany(10000)
+        if not batch:
+            break
+        writer.writerows(batch)
+
+results_file.close()
