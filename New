@@ -1,45 +1,35 @@
-import oracledb
+import json
+import pandas as pd
 
-conn = oracledb.connect(user="...", password="...", dsn="...")
-cur = conn.cursor()
+# Read one line from the text file
+with open("data.txt", "r", encoding="utf-8") as f:
+    line = f.readline().strip()
 
-# For string IDs use SYS.ODCIVARCHAR2LIST; for numeric IDs use SYS.ODCINUMBERLIST
-vlist_t = conn.gettype("SYS.ODCIVARCHAR2LIST")
+# Split by "|"
+parts = line.split("|")
 
-# Suppose you already have a Python list of IDs
-trade_ids = [ "T001", "T002", "T003", ... ]
+# First 3 fields
+field1, field2, field3 = parts[:3]
 
-# Chunk the list to avoid overly large binds (tune chunk size as needed)
-CHUNK = 5000
-def chunks(seq, n):
-    for i in range(0, len(seq), n):
-        yield seq[i:i+n]
+# Parse JSON (last part)
+json_str = parts[3]
+json_data = json.loads(json_str)
 
-results_file = open("trade_details.csv", "w", newline="")
-import csv
-writer = csv.writer(results_file)
-wrote_header = False
+# Flatten into rows
+rows = []
+for item in json_data:
+    row = {
+        "Field1": field1,
+        "Field2": field2,
+        "Field3": field3,
+        **item
+    }
+    rows.append(row)
 
-for part in chunks(trade_ids, CHUNK):
-    arr = vlist_t.newobject()
-    arr.extend(part)
+# Convert to DataFrame
+df = pd.DataFrame(rows)
 
-    sql = """
-    SELECT t.*
-    FROM big_trade_table t
-    JOIN TABLE(:idlist) l
-      ON l.COLUMN_VALUE = t.trade_id
-    """
-    cur.execute(sql, idlist=arr)
+# Write to Excel
+df.to_excel("output.xlsx", index=False)
 
-    if not wrote_header:
-        writer.writerow([d[0] for d in cur.description])
-        wrote_header = True
-
-    while True:
-        batch = cur.fetchmany(10000)
-        if not batch:
-            break
-        writer.writerows(batch)
-
-results_file.close()
+print("Excel file 'output.xlsx' created.")
